@@ -36,7 +36,7 @@ SYSTEM_INCLUDE_PATHS = \
     /boot/system/develop/headers/private/interface \
     /boot/system/develop/headers/private/netservices
 
-RDEFS = BeTonIcons.rdef
+RDEFS = BeTon.rdef
 LOCALES = de
 
 COMPILER_FLAGS = -Wall -std=c++17
