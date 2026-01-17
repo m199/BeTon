@@ -46,6 +46,13 @@ public:
   const MediaItem *ItemAt(int32 index) const;
   bool IsRowMissing(BRow *row) const;
 
+  /**
+   * @brief Sets the path of the currently playing track.
+   * The row with this path will be rendered in bold.
+   */
+  void SetNowPlayingPath(const BString &path);
+  const BString &NowPlayingPath() const { return fNowPlayingPath; }
+
 protected:
   bool InitiateDrag(BPoint point, bool wasSelected) override;
   void KeyDown(const char *bytes, int32 numBytes) override;
@@ -84,6 +91,11 @@ private:
   ///@{
   int32 fDragSourceIndex = -1;
   BPoint fLastDropPoint;
+  ///@}
+
+  /** @name Now playing indicator */
+  ///@{
+  BString fNowPlayingPath;
   ///@}
 };
 

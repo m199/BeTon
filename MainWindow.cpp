@@ -1329,6 +1329,10 @@ void MainWindow::MessageReceived(BMessage *msg) {
       label << displayTitle;
 
       fTitleView->SetText(label);
+
+      if (fLibraryManager && fLibraryManager->ContentView()) {
+        fLibraryManager->ContentView()->SetNowPlayingPath(path);
+      }
     }
     break;
   }

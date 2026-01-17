@@ -259,15 +259,18 @@ static void BuildFilesMessage(ContentColumnView *view, BMessage &filesMsg) {
  * @brief BStringField subclass that tracks whether the file is missing.
  *
  * Used to gray out text for missing files in the list view.
+ * Also stores the item path for now-playing comparison.
  */
 class StatusStringField : public BStringField {
 public:
-  StatusStringField(const char *string, bool missing)
-      : BStringField(string), fMissing(missing) {}
+  StatusStringField(const char *string, bool missing, const BString &path = "")
+      : BStringField(string), fMissing(missing), fPath(path) {}
   bool IsMissing() const { return fMissing; }
+  const BString &Path() const { return fPath; }
 
 private:
   bool fMissing;
+  BString fPath;
 };
 
 /**
@@ -286,19 +289,39 @@ private:
 
 /**
  * @class StatusStringColumn
- * @brief Column that renders text in gray if the file is missing.
+ * @brief Column that renders text in gray if the file is missing,
+ *        and bold if the row is currently playing.
  */
 class StatusStringColumn : public BStringColumn {
 public:
   StatusStringColumn(const char *title, float width, float minWidth,
                      float maxWidth, uint32 truncate,
-                     alignment align = B_ALIGN_LEFT)
-      : BStringColumn(title, width, minWidth, maxWidth, truncate, align) {}
+                     alignment align = B_ALIGN_LEFT,
+                     ContentColumnView *owner = nullptr)
+      : BStringColumn(title, width, minWidth, maxWidth, truncate, align),
+        fOwner(owner) {}
+
+  void SetOwner(ContentColumnView *owner) { fOwner = owner; }
 
   void DrawField(BField *field, BRect rect, BView *parent) override {
     StatusStringField *f = dynamic_cast<StatusStringField *>(field);
     rgb_color oldColor = parent->HighColor();
     bool isGray = (f && f->IsMissing());
+    bool isBold = false;
+
+    // Check if this field's path matches the now-playing path
+    if (f && fOwner && !fOwner->NowPlayingPath().IsEmpty() &&
+        !f->Path().IsEmpty() && f->Path() == fOwner->NowPlayingPath()) {
+      isBold = true;
+    }
+
+    BFont oldFont;
+    if (isBold) {
+      parent->GetFont(&oldFont);
+      BFont boldFont = oldFont;
+      boldFont.SetFace(B_BOLD_FACE);
+      parent->SetFont(&boldFont);
+    }
 
     if (isGray) {
       parent->SetHighColor(tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
@@ -309,7 +332,14 @@ public:
       BStringColumn::DrawField(field, rect, parent);
 
     parent->SetHighColor(oldColor);
+
+    if (isBold) {
+      parent->SetFont(&oldFont);
+    }
   }
+
+private:
+  ContentColumnView *fOwner = nullptr;
 };
 
 /**
@@ -387,6 +417,32 @@ ContentColumnView::ContentColumnView(const char *name)
 
   SetInvocationMessage(new BMessage(MSG_PLAY));
   SetSelectionMessage(new BMessage(MSG_SELECTION_CHANGED_CONTENT));
+
+  // Set owner on all StatusStringColumn instances for now-playing bold
+  // rendering
+  for (int32 i = 0; i < CountColumns(); ++i) {
+    if (auto *col = dynamic_cast<StatusStringColumn *>(ColumnAt(i))) {
+      col->SetOwner(this);
+    }
+  }
+}
+
+void ContentColumnView::SetNowPlayingPath(const BString &path) {
+  if (fNowPlayingPath != path) {
+    BString oldPath = fNowPlayingPath;
+    fNowPlayingPath = path;
+
+    // Invalidate specific rows that need redrawing
+    for (int32 i = 0; i < CountRows(); ++i) {
+      MediaRow *mr = dynamic_cast<MediaRow *>(RowAt(i));
+      if (mr) {
+        // Invalidate old playing row and new playing row
+        if (mr->Item().path == oldPath || mr->Item().path == path) {
+          InvalidateRow(mr);
+        }
+      }
+    }
+  }
 }
 
 ContentColumnView::~ContentColumnView() {}
@@ -395,26 +451,27 @@ void ContentColumnView::AddEntry(const MediaItem &mi) {
   MediaRow *row = new MediaRow(mi);
   bool m = mi.missing;
 
-  row->SetField(new StatusStringField(mi.title, m), 0);
-  row->SetField(new StatusStringField(mi.artist, m), 1);
-  row->SetField(new StatusStringField(mi.album, m), 2);
-  row->SetField(new StatusStringField(mi.albumArtist, m), 3);
-  row->SetField(new StatusStringField(mi.genre, m), 4);
+  // Pass mi.path to each StatusStringField for now-playing detection
+  row->SetField(new StatusStringField(mi.title, m, mi.path), 0);
+  row->SetField(new StatusStringField(mi.artist, m, mi.path), 1);
+  row->SetField(new StatusStringField(mi.album, m, mi.path), 2);
+  row->SetField(new StatusStringField(mi.albumArtist, m, mi.path), 3);
+  row->SetField(new StatusStringField(mi.genre, m, mi.path), 4);
 
   BString yearStr;
   yearStr << mi.year;
-  row->SetField(new StatusStringField(yearStr, m), 5);
+  row->SetField(new StatusStringField(yearStr, m, mi.path), 5);
 
   BString durStr;
   int32 min = mi.duration / 60;
   int32 sec = mi.duration % 60;
   durStr.SetToFormat("%ld:%02ld", (long)min, (long)sec);
-  row->SetField(new StatusStringField(durStr, m), 6);
+  row->SetField(new StatusStringField(durStr, m, mi.path), 6);
 
   row->SetField(new StatusIntegerField(mi.track, m), 7);
   row->SetField(new StatusIntegerField(mi.disc, m), 8);
   row->SetField(new StatusIntegerField(mi.bitrate, m), 9);
-  row->SetField(new StatusStringField(mi.path, m), 10);
+  row->SetField(new StatusStringField(mi.path, m, mi.path), 10);
 
   AddRow(row);
 }
