@@ -14,7 +14,7 @@
 #include "SeekBarView.h"
 #include "TagSync.h"
 
-#include <Alert.h>
+#include <AboutWindow.h>
 #include <Button.h>
 #include <ColumnTypes.h>
 #include <DataIO.h>
@@ -479,20 +479,18 @@ void MainWindow::MessageReceived(BMessage *msg) {
   switch (msg->what) {
 
   case B_ABOUT_REQUESTED: {
-    BAlert *about =
-        new BAlert("About BeTon",
-                   "BeTon\n"
-                   "Version 1.0\n\n"
+    BAboutWindow* about =
+        new BAboutWindow("BeTon", "application/x-vnd.BeTon");
+    about->AddCopyright(2025, "Daniel Weber");
+    about->AddDescription(
                    "A music library manager and player for Haiku.\n\n"
                    "Solid grey and cold\nYet it vibrates with the "
                    "sound\nConcrete sings today\n\n"
-                   "© 2025-2026 Daniel Weber\n\n"
                    "Icons by zuMi\n"
                    "https://hvif-store.art/\n\n"
-                   "Licensed under the MIT License.",
-                   "OK", nullptr, nullptr, B_WIDTH_AS_USUAL, B_INFO_ALERT);
-    about->SetShortcut(0, B_ESCAPE);
-    about->Go();
+                   "Licensed under the MIT License."
+                   );
+    about->Show();
     break;
   }
 
