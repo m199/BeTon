@@ -1356,6 +1356,34 @@ void MainWindow::MessageReceived(BMessage *msg) {
         info << B_TRANSLATE("Bitrate: ") << bitrate << " kbps\n";
         fInfoPanel->SetFileInfo(info);
       }
+
+      if (fShowCoverArt && fInfoPanel && !path.IsEmpty()) {
+        fInfoPanel->ClearCover();
+        BMessenger target(this);
+        BString pathStr = path;
+        LaunchThread("CoverFetch", [target, pathStr]() {
+          BPath p(pathStr.String());
+          CoverBlob cb;
+          BBitmap *bmp = nullptr;
+
+          if (TagSync::ExtractEmbeddedCover(p, cb) && cb.data() &&
+              cb.size() > 0) {
+            BMemoryIO io(cb.data(), cb.size());
+            bmp = BTranslationUtils::GetBitmap(&io);
+          }
+
+          if (target.IsValid()) {
+            BMessage reply(MSG_COVER_BITMAP_READY);
+            reply.AddString("path", pathStr);
+            if (bmp) {
+              reply.AddPointer("bitmap", bmp);
+            }
+            target.SendMessage(&reply);
+          } else {
+            delete bmp;
+          }
+        });
+      }
     }
     break;
   }
@@ -1590,6 +1618,11 @@ void MainWindow::MessageReceived(BMessage *msg) {
       if (mi && path == mi->path) {
         match = true;
       }
+    }
+
+    // Also match against currently playing track
+    if (!match && path == cv->NowPlayingPath()) {
+      match = true;
     }
 
     if (match && bmp && fInfoPanel) {
