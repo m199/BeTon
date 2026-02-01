@@ -3101,6 +3101,14 @@ void MainWindow::SaveSettings() {
       state.AddData("selection_color", B_RGB_COLOR_TYPE, &fSelectionColor,
                     sizeof(rgb_color));
 
+      if (fPlaylistManager && fPlaylistManager->View()) {
+        std::vector<BString> playlistOrder =
+            fPlaylistManager->View()->GetPlaylistOrder();
+        for (const auto &name : playlistOrder) {
+          state.AddString("playlist_order", name);
+        }
+      }
+
       state.Flatten(&file);
     }
   }
@@ -3170,6 +3178,17 @@ void MainWindow::LoadSettings() {
           fSelColorMatchItem->SetMarked(fUseSeekBarColorForSelection);
 
         ApplyColors();
+
+        // Extract playlist order while state is in scope
+        std::vector<BString> playlistOrder;
+        BString name;
+        for (int32 i = 0; state.FindString("playlist_order", i, &name) == B_OK;
+             ++i) {
+          playlistOrder.push_back(name);
+        }
+
+        // Store for later use after playlists are loaded
+        fPendingPlaylistOrder = playlistOrder;
       }
     }
   }
@@ -3185,6 +3204,12 @@ void MainWindow::LoadSettings() {
   if (fPlaylistManager && !fPlaylistPath.IsEmpty()) {
     fPlaylistManager->SetPlaylistFolderPath(fPlaylistPath);
     fPlaylistManager->LoadAvailablePlaylists();
+
+    // Restore playlist order from settings
+    if (!fPendingPlaylistOrder.empty()) {
+      fPlaylistManager->View()->SetPlaylistOrder(fPendingPlaylistOrder);
+      fPendingPlaylistOrder.clear();
+    }
   }
 }
 

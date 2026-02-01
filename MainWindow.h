@@ -125,6 +125,7 @@ private:
   BString fPlaylistPath;
   BMessage fPendingPlaylistFiles;
   BString fCurrentPlaylistName;
+  std::vector<BString> fPendingPlaylistOrder;
 
   ///@}
 

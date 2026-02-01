@@ -18,6 +18,7 @@
 #include <TextControl.h>
 #include <algorithm>
 #include <cinttypes>
+#include <map>
 #include <stdio.h>
 
 #undef B_TRANSLATION_CONTEXT
@@ -90,6 +91,23 @@ void PlaylistListView::SelectionChanged(int32 index) {
 void PlaylistListView::MessageReceived(BMessage *msg) {
   switch (msg->what) {
   case B_SIMPLE_DATA: {
+    int32 sourceIndex;
+    if (msg->FindInt32("playlist_index", &sourceIndex) == B_OK) {
+
+      if (fDropLineIndex >= 0) {
+        _ReorderItem(sourceIndex, fDropLineIndex);
+
+        BMessage orderChanged(MSG_PLAYLIST_ORDER_CHANGED);
+        fTarget.SendMessage(&orderChanged);
+      }
+
+      fDragIndex = -1;
+      fDropLineIndex = -1;
+      fIsDragging = false;
+      Invalidate();
+      break;
+    }
+
     if (!msg->HasRef("refs"))
       break;
 
@@ -208,20 +226,87 @@ void PlaylistListView::MouseDown(BPoint where) {
     return;
   }
 
+  if (index >= 0) {
+    fDragStartPoint = where;
+    fDragIndex = index;
+  }
+
   SimpleColumnView::MouseDown(where);
 }
 
 void PlaylistListView::MouseMoved(BPoint point, uint32 transit,
                                   const BMessage *dragMsg) {
-  if (dragMsg && dragMsg->what == B_SIMPLE_DATA && dragMsg->HasRef("refs")) {
-    fLastDropPoint = point;
-    int32 idx = HitIndex(point);
-    if (idx >= 0 && IsWritableAt(idx))
-      SetHoverIndex(idx);
-    else
-      SetHoverIndex(-1);
+
+  if (!fIsDragging && fDragIndex >= 0) {
+    uint32 buttons;
+    GetMouse(NULL, &buttons);
+
+    if (buttons & B_PRIMARY_MOUSE_BUTTON) {
+
+      float dx = point.x - fDragStartPoint.x;
+      float dy = point.y - fDragStartPoint.y;
+      float distance = sqrtf(dx * dx + dy * dy);
+
+      if (distance > 5.0f) {
+        fIsDragging = true;
+
+        BMessage dragMsg(B_SIMPLE_DATA);
+        dragMsg.AddInt32("playlist_index", fDragIndex);
+
+        BRect dragRect(0, 0, Bounds().Width(), LineHeight() - 1);
+        BBitmap *dragBitmap = new BBitmap(dragRect, B_RGBA32, true);
+        if (dragBitmap->Lock()) {
+          BView *dragView = new BView(dragRect, "drag", B_FOLLOW_NONE, 0);
+          dragBitmap->AddChild(dragView);
+
+          dragView->SetHighColor(ui_color(B_PANEL_BACKGROUND_COLOR));
+          dragView->FillRect(dragRect);
+          dragView->SetHighColor(ui_color(B_PANEL_TEXT_COLOR));
+          dragView->DrawString(ItemAt(fDragIndex).String(),
+                               BPoint(5, LineHeight() * 0.7f));
+
+          dragView->Sync();
+          dragBitmap->Unlock();
+        }
+
+        DragMessage(&dragMsg, dragBitmap, B_OP_ALPHA,
+                    BPoint(point.x - fDragStartPoint.x, LineHeight() / 2));
+        return;
+      }
+    } else {
+      fDragIndex = -1;
+      fIsDragging = false;
+    }
+  }
+
+  if (dragMsg && dragMsg->what == B_SIMPLE_DATA) {
+    int32 sourceIndex;
+    if (dragMsg->FindInt32("playlist_index", &sourceIndex) == B_OK) {
+      float rowH = LineHeight();
+      int32 targetRow = (int32)((point.y + rowH / 2.0f) / rowH);
+      targetRow = std::max(0, std::min(targetRow, CountItems()));
+
+      if (targetRow != fDropLineIndex) {
+        fDropLineIndex = targetRow;
+        Invalidate();
+      }
+      return;
+    }
+
+    if (dragMsg->HasRef("refs")) {
+      fLastDropPoint = point;
+      int32 idx = HitIndex(point);
+      if (idx >= 0 && IsWritableAt(idx))
+        SetHoverIndex(idx);
+      else
+        SetHoverIndex(-1);
+    }
   } else {
     SetHoverIndex(-1);
+    if (fDropLineIndex >= 0) {
+      fDropLineIndex = -1;
+      Invalidate();
+    }
   }
   SimpleColumnView::MouseMoved(point, transit, dragMsg);
 }
@@ -462,4 +547,95 @@ void PlaylistListView::Draw(BRect updateRect) {
       StrokeRect(rowRect);
     }
   }
+
+  if (fDropLineIndex >= 0 && fDropLineIndex <= CountItems()) {
+    float y = fDropLineIndex * rowH;
+
+    rgb_color dropColor = ui_color(B_PANEL_TEXT_COLOR);
+
+    SetHighColor(dropColor);
+    SetPenSize(3.0f);
+    StrokeLine(BPoint(bounds.left, y), BPoint(bounds.right, y));
+    SetPenSize(1.0f);
+  }
+}
+
+void PlaylistListView::_ReorderItem(int32 from, int32 to) {
+  if (from < 0 || from >= CountItems() || to < 0 || to > CountItems() ||
+      from == to)
+    return;
+
+  int32 targetIndex = to;
+  if (to > from)
+    targetIndex--;
+
+  SimpleItem movedItem = fItems[from];
+  PlaylistRow movedRow = fRows[from];
+
+  fItems.erase(fItems.begin() + from);
+  fRows.erase(fRows.begin() + from);
+
+  fItems.insert(fItems.begin() + targetIndex, movedItem);
+  fRows.insert(fRows.begin() + targetIndex, movedRow);
+
+  Select(targetIndex);
+
+  Invalidate();
+  ScrollToSelection();
+
+  DEBUG_PRINT("[PlaylistListView] Reordered: %ld -> %ld\n", (long)from,
+              (long)targetIndex);
+}
+
+std::vector<BString> PlaylistListView::GetPlaylistOrder() const {
+  std::vector<BString> order;
+  for (int32 i = 0; i < CountItems(); ++i) {
+    order.push_back(ItemAt(i));
+  }
+  return order;
+}
+
+void PlaylistListView::SetPlaylistOrder(const std::vector<BString> &order) {
+  DEBUG_PRINT("[PlaylistListView] SetPlaylistOrder called with %zu items\n",
+              order.size());
+
+  std::map<BString, int32> targetPositions;
+  for (size_t i = 0; i < order.size(); ++i) {
+    targetPositions[order[i]] = i;
+    DEBUG_PRINT("[PlaylistListView]   Order[%zu] = '%s'\n", i,
+                order[i].String());
+  }
+
+  std::vector<SimpleItem> newItems;
+  std::vector<PlaylistRow> newRows;
+
+  for (const auto &name : order) {
+    int32 currentIndex = FindIndexByName(name);
+    if (currentIndex >= 0 && currentIndex < (int32)fItems.size()) {
+      newItems.push_back(fItems[currentIndex]);
+      newRows.push_back(fRows[currentIndex]);
+      DEBUG_PRINT("[PlaylistListView]   Found '%s' at index %ld\n",
+                  name.String(), (long)currentIndex);
+    }
+  }
+
+  for (size_t i = 0; i < fItems.size(); ++i) {
+    const BString &name = fItems[i].text;
+    if (targetPositions.find(name) == targetPositions.end()) {
+      newItems.push_back(fItems[i]);
+      newRows.push_back(fRows[i]);
+      DEBUG_PRINT("[PlaylistListView]   Appending '%s' (not in saved order)\n",
+                  name.String());
+    }
+  }
+
+  fItems = newItems;
+  fRows = newRows;
+
+  Invalidate();
+  UpdateScrollbars();
+
+  DEBUG_PRINT(
+      "[PlaylistListView] SetPlaylistOrder complete, now have %zu items\n",
+      fItems.size());
 }

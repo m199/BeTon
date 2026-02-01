@@ -91,6 +91,7 @@
 #define MSG_NAME_PROMPT_OK 'ok__'           ///< Name entry confirmed.
 #define MSG_NAME_PROMPT_CANCEL 'cncl'       ///< Name entry cancelled.
 #define MSG_REORDER_PLAYLIST 'rord'         ///< Reorder items in playlist.
+#define MSG_PLAYLIST_ORDER_CHANGED 'plOC'   ///< Playlist sidebar order changed.
 ///@}
 
 /** @name Metadata & MusicBrainz */

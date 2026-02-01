@@ -46,6 +46,9 @@ public:
 
   int32 AddItem(const char *title, bool writable);
   int32 AddItem(const char *title, bool writable, PlaylistItemKind kind);
+
+  std::vector<BString> GetPlaylistOrder() const;
+  void SetPlaylistOrder(const std::vector<BString> &order);
   ///@}
   /** @name Internal Helpers */
   ///@{
@@ -57,6 +60,8 @@ private:
 
   void _EnsureIconsLoaded() const;
   BBitmap *_IconFor(PlaylistItemKind kind) const;
+
+  void _ReorderItem(int32 from, int32 to);
   ///@}
 
   /** @name Data & State */
@@ -68,6 +73,11 @@ private:
   std::vector<PlaylistRow> fRows;
 
   int32 fHoverIndex{-1};
+
+  int32 fDragIndex{-1};
+  int32 fDropLineIndex{-1};
+  BPoint fDragStartPoint;
+  bool fIsDragging{false};
 
   mutable BBitmap *fIconLibrary = nullptr;
   mutable BBitmap *fIconPlaylist = nullptr;
