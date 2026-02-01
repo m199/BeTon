@@ -479,17 +479,14 @@ void MainWindow::MessageReceived(BMessage *msg) {
   switch (msg->what) {
 
   case B_ABOUT_REQUESTED: {
-    BAboutWindow* about =
-        new BAboutWindow("BeTon", "application/x-vnd.BeTon");
+    BAboutWindow *about = new BAboutWindow("BeTon", "application/x-vnd.BeTon");
     about->AddCopyright(2025, "Daniel Weber");
-    about->AddDescription(
-                   "A music library manager and player for Haiku.\n\n"
-                   "Solid grey and cold\nYet it vibrates with the "
-                   "sound\nConcrete sings today\n\n"
-                   "Icons by zuMi\n"
-                   "https://hvif-store.art/\n\n"
-                   "Licensed under the MIT License."
-                   );
+    about->AddDescription("A music library manager and player for Haiku.\n\n"
+                          "Solid grey and cold\nYet it vibrates with the "
+                          "sound\nConcrete sings today\n\n"
+                          "Icons by zuMi\n"
+                          "https://hvif-store.art/\n\n"
+                          "Licensed under the MIT License.");
     about->Show();
     break;
   }
@@ -3086,6 +3083,9 @@ void MainWindow::SaveSettings() {
                B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
     if (file.InitCheck() == B_OK) {
       BMessage state;
+
+      state.AddInt32("settings_version", 2);
+
       fLibraryManager->ContentView()->SaveState(&state);
 
       state.AddBool("show_cover_art", fShowCoverArt);
@@ -3120,7 +3120,13 @@ void MainWindow::LoadSettings() {
     if (file.InitCheck() == B_OK) {
       BMessage state;
       if (state.Unflatten(&file) == B_OK) {
-        fLibraryManager->ContentView()->LoadState(&state);
+
+        int32 version = 0;
+        state.FindInt32("settings_version", &version);
+
+        if (version >= 2) {
+          fLibraryManager->ContentView()->LoadState(&state);
+        }
 
         if (state.FindBool("show_cover_art", &fShowCoverArt) == B_OK) {
           if (fViewCoverItem)

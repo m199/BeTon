@@ -70,6 +70,12 @@ PropertiesWindow::PropertiesWindow(BRect frame, const BPath &filePath,
       fFilePath(filePath), fTarget(target) {
   fIsMulti = false;
   _BuildUI();
+  ResizeToPreferred();
+
+  BRect bounds = Bounds();
+  SetSizeLimits(bounds.Width(), 10000, bounds.Height(), 10000);
+
+  CenterOnScreen();
   SetTitle(BString(B_TRANSLATE("Properties - ")) << filePath.Leaf());
   Show();
 }
@@ -100,6 +106,12 @@ PropertiesWindow::PropertiesWindow(BRect frame,
   if (!fFiles.empty())
     fFilePath = fFiles.front();
   _BuildUI();
+  ResizeToPreferred();
+
+  BRect bounds = Bounds();
+  SetSizeLimits(bounds.Width(), 10000, bounds.Height(), 10000);
+
+  CenterOnScreen();
   BString t(B_TRANSLATE("Properties - "));
   t << fFiles.size() << B_TRANSLATE(" Files");
   SetTitle(t);
@@ -117,8 +129,8 @@ PropertiesWindow::PropertiesWindow(BRect frame,
  */
 PropertiesWindow::PropertiesWindow(const std::vector<BPath> &filePaths,
                                    int32 initialIndex, const BMessenger &target)
-    : BWindow(BRect(100, 100, 620, 800), B_TRANSLATE("Properties"),
-              B_TITLED_WINDOW, 0),
+    : BWindow(BRect(0, 0, 500, 600), B_TRANSLATE("Properties"), B_TITLED_WINDOW,
+              0),
       fTarget(target) {
 
   fFiles = filePaths;
@@ -135,6 +147,12 @@ PropertiesWindow::PropertiesWindow(const std::vector<BPath> &filePaths,
 
   _BuildUI();
 
+  ResizeToPreferred();
+
+  BRect bounds = Bounds();
+  SetSizeLimits(bounds.Width(), 10000, bounds.Height(), 10000);
+
+  CenterOnScreen();
   SetTitle(BString(B_TRANSLATE("Properties - ")) << fFilePath.Leaf());
 
   fBtnPrev->SetEnabled(fCurrentIndex > 0);
@@ -466,7 +484,6 @@ void PropertiesWindow::_BuildTab_Cover(BView *parent) {
 
   (void)fBtnCoverFromMB;
 
-  // Push widgets to top
   gl->AddItem(BSpaceLayoutItem::CreateGlue());
 
   if (auto *pg = dynamic_cast<BGroupLayout *>(parent->GetLayout()))
