@@ -35,8 +35,7 @@ static BBitmap *LoadVectorIconFromResourceID(int32 id, float size) {
   const void *data =
       be_app->AppResources()->LoadResource(B_VECTOR_ICON_TYPE, id, &len);
   if (!data || len == 0) {
-    fprintf(stderr, "[PlaylistListView] Icon-ID %ld nicht gefunden\n",
-            (long)id);
+    fprintf(stderr, "[PlaylistListView] Icon ID %ld not found\n", (long)id);
     return nullptr;
   }
 
@@ -45,8 +44,7 @@ static BBitmap *LoadVectorIconFromResourceID(int32 id, float size) {
   if (BIconUtils::GetVectorIcon(static_cast<const uint8 *>(data), len, bmp) !=
       B_OK) {
     delete bmp;
-    fprintf(stderr,
-            "[PlaylistListView] Icon-ID %ld: Dekodierung fehlgeschlagen\n",
+    fprintf(stderr, "[PlaylistListView] Icon ID %ld: decoding failed\n",
             (long)id);
     return nullptr;
   }
@@ -119,10 +117,9 @@ void PlaylistListView::MessageReceived(BMessage *msg) {
       fTarget.SendMessage(&newMsg);
     } else {
       if (!IsWritableAt(dropIndex)) {
-        DEBUG_PRINT(
-            "[PlaylistListView] Drop auf nicht beschreibbare Playlist -> "
-            "ignoriert (idx=%ld)\n",
-            (long)dropIndex);
+        DEBUG_PRINT("[PlaylistListView] Drop on non-writable playlist -> "
+                    "ignored (idx=%ld)\n",
+                    (long)dropIndex);
         SetHoverIndex(-1);
         break;
       }
@@ -132,7 +129,7 @@ void PlaylistListView::MessageReceived(BMessage *msg) {
       int32 i = 0;
       while (msg->FindRef("refs", i++, &ref) == B_OK) {
         BPath path(&ref);
-        DEBUG_PRINT("[PlaylistListView] Datei '%s' → Playlist '%s'\n",
+        DEBUG_PRINT("[PlaylistListView] File '%s' → Playlist '%s'\n",
                     path.Path(), playlistName.String());
         AddFileToPlaylist(dropIndex, ref);
       }
@@ -156,7 +153,7 @@ void PlaylistListView::MessageReceived(BMessage *msg) {
   }
 
   case MSG_DELETE_PLAYLIST:
-    DEBUG_PRINT("[PlaylistListView] MSG_DELETE_PLAYLIST empfangen\n");
+    DEBUG_PRINT("[PlaylistListView] MSG_DELETE_PLAYLIST received\n");
     RemoveSelectedPlaylist();
     break;
 
@@ -217,7 +214,7 @@ void PlaylistListView::MouseDown(BPoint where) {
       BMenuItem *chosen =
           fContextMenu->Go(where, false, false, BRect(where, where), false);
       if (chosen) {
-        DEBUG_PRINT("[PlaylistListView] Menü gewählt: %s\n", chosen->Label());
+        DEBUG_PRINT("[PlaylistListView] Menu selected: %s\n", chosen->Label());
         BMessage *m = chosen->Message();
         if (m)
           MessageReceived(m);
@@ -253,24 +250,9 @@ void PlaylistListView::MouseMoved(BPoint point, uint32 transit,
         BMessage dragMsg(B_SIMPLE_DATA);
         dragMsg.AddInt32("playlist_index", fDragIndex);
 
-        BRect dragRect(0, 0, Bounds().Width(), LineHeight() - 1);
-        BBitmap *dragBitmap = new BBitmap(dragRect, B_RGBA32, true);
-        if (dragBitmap->Lock()) {
-          BView *dragView = new BView(dragRect, "drag", B_FOLLOW_NONE, 0);
-          dragBitmap->AddChild(dragView);
-
-          dragView->SetHighColor(ui_color(B_PANEL_BACKGROUND_COLOR));
-          dragView->FillRect(dragRect);
-          dragView->SetHighColor(ui_color(B_PANEL_TEXT_COLOR));
-          dragView->DrawString(ItemAt(fDragIndex).String(),
-                               BPoint(5, LineHeight() * 0.7f));
-
-          dragView->Sync();
-          dragBitmap->Unlock();
-        }
-
-        DragMessage(&dragMsg, dragBitmap, B_OP_ALPHA,
-                    BPoint(point.x - fDragStartPoint.x, LineHeight() / 2));
+        float rowTop = fDragIndex * LineHeight();
+        BRect dragRect(0, rowTop, Bounds().Width(), rowTop + LineHeight() - 1);
+        DragMessage(&dragMsg, dragRect, this);
         return;
       }
     } else {
@@ -286,10 +268,7 @@ void PlaylistListView::MouseMoved(BPoint point, uint32 transit,
       int32 targetRow = (int32)((point.y + rowH / 2.0f) / rowH);
       targetRow = std::max(0, std::min(targetRow, CountItems()));
 
-      if (targetRow != fDropLineIndex) {
-        fDropLineIndex = targetRow;
-        Invalidate();
-      }
+      fDropLineIndex = targetRow;
       return;
     }
 
@@ -305,7 +284,6 @@ void PlaylistListView::MouseMoved(BPoint point, uint32 transit,
     SetHoverIndex(-1);
     if (fDropLineIndex >= 0) {
       fDropLineIndex = -1;
-      Invalidate();
     }
   }
   SimpleColumnView::MouseMoved(point, transit, dragMsg);
@@ -333,7 +311,7 @@ int32 PlaylistListView::CreateNewPlaylist(const char *title) {
   int32 index = AddItem(title, true, PlaylistItemKind::Playlist);
   Select(index);
   UpdateScrollbars();
-  DEBUG_PRINT("[PlaylistListView] Neue Playlist '%s' angelegt\n", title);
+  DEBUG_PRINT("[PlaylistListView] New playlist '%s' created\n", title);
   return index;
 }
 
@@ -346,7 +324,7 @@ void PlaylistListView::AddFileToPlaylist(int32 index, const entry_ref &ref) {
   BString playlistName = ItemAt(index);
   BPath path(&ref);
   AddItemToPlaylist(path.Path(), playlistName);
-  DEBUG_PRINT("[PlaylistListView] Datei '%s' zu Playlist '%s' gespeichert\n",
+  DEBUG_PRINT("[PlaylistListView] File '%s' saved to playlist '%s'\n",
               path.Path(), playlistName.String());
 }
 
@@ -363,7 +341,7 @@ void PlaylistListView::RemoveSelectedPlaylist() {
     fCurrentSelection = -1;
     UpdateScrollbars();
     Invalidate();
-    DEBUG_PRINT("[PlaylistListView] Playlist '%s' gelöscht\n", name.String());
+    DEBUG_PRINT("[PlaylistListView] Playlist '%s' deleted\n", name.String());
   }
 }
 
@@ -548,16 +526,7 @@ void PlaylistListView::Draw(BRect updateRect) {
     }
   }
 
-  if (fDropLineIndex >= 0 && fDropLineIndex <= CountItems()) {
-    float y = fDropLineIndex * rowH;
-
-    rgb_color dropColor = ui_color(B_PANEL_TEXT_COLOR);
-
-    SetHighColor(dropColor);
-    SetPenSize(3.0f);
-    StrokeLine(BPoint(bounds.left, y), BPoint(bounds.right, y));
-    SetPenSize(1.0f);
-  }
+  // Drop line removed per user request
 }
 
 void PlaylistListView::_ReorderItem(int32 from, int32 to) {
