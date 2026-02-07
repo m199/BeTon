@@ -291,6 +291,16 @@ void MainWindow::_BuildUI() {
   selColorMenu->AddItem(fSelColorMatchItem);
   appearanceMenu->AddItem(selColorMenu);
 
+  BMenu *tooltipsMenu = new BMenu(B_TRANSLATE("Tooltips"));
+  fTooltipsOnItem =
+      new BMenuItem(B_TRANSLATE("On"), new BMessage(MSG_TOOLTIPS_ON));
+  fTooltipsOffItem =
+      new BMenuItem(B_TRANSLATE("Off"), new BMessage(MSG_TOOLTIPS_OFF));
+  fTooltipsOffItem->SetMarked(true);
+  tooltipsMenu->AddItem(fTooltipsOnItem);
+  tooltipsMenu->AddItem(fTooltipsOffItem);
+  appearanceMenu->AddItem(tooltipsMenu);
+
   fMenuBar->AddItem(appearanceMenu);
 
   BMenu *helpMenu = new BMenu(B_TRANSLATE("Help"));
@@ -356,6 +366,11 @@ void MainWindow::_BuildUI() {
   fBtnRepeat->SetExplicitSize(buttonSize);
   fBtnStop->SetExplicitSize(buttonSize);
   fBtnNext->SetExplicitSize(buttonSize);
+
+  if (fShowTooltips) {
+    fBtnShuffle->SetToolTip("Shuffle");
+    fBtnRepeat->SetToolTip("Repeat");
+  }
 
   fVolumeSlider = new BSlider("volume", nullptr, nullptr, 0, 100, B_HORIZONTAL);
   fVolumeSlider->SetModificationMessage(new BMessage(MSG_VOLUME_CHANGED));
@@ -653,6 +668,32 @@ void MainWindow::MessageReceived(BMessage *msg) {
     SaveSettings();
     break;
   }
+
+  case MSG_TOOLTIPS_ON:
+    fShowTooltips = true;
+    if (fTooltipsOnItem)
+      fTooltipsOnItem->SetMarked(true);
+    if (fTooltipsOffItem)
+      fTooltipsOffItem->SetMarked(false);
+    if (fBtnShuffle)
+      fBtnShuffle->SetToolTip("Shuffle");
+    if (fBtnRepeat)
+      fBtnRepeat->SetToolTip("Repeat");
+    SaveSettings();
+    break;
+
+  case MSG_TOOLTIPS_OFF:
+    fShowTooltips = false;
+    if (fTooltipsOnItem)
+      fTooltipsOnItem->SetMarked(false);
+    if (fTooltipsOffItem)
+      fTooltipsOffItem->SetMarked(true);
+    if (fBtnShuffle)
+      fBtnShuffle->SetToolTip((const char *)nullptr);
+    if (fBtnRepeat)
+      fBtnRepeat->SetToolTip((const char *)nullptr);
+    SaveSettings();
+    break;
 
   case B_COLORS_UPDATED: {
     if (!fUseCustomSeekBarColor) {
@@ -1617,14 +1658,17 @@ void MainWindow::MessageReceived(BMessage *msg) {
       }
     }
 
-    // Also match against currently playing track
     if (!match && path == cv->NowPlayingPath()) {
       match = true;
     }
 
-    if (match && bmp && fInfoPanel) {
+    if (match && fInfoPanel) {
       if (fShowCoverArt) {
-        fInfoPanel->SetCover(bmp);
+        if (bmp) {
+          fInfoPanel->SetCover(bmp);
+        } else {
+          fInfoPanel->ClearCover();
+        }
       }
     }
 
@@ -3101,6 +3145,10 @@ void MainWindow::SaveSettings() {
       state.AddData("selection_color", B_RGB_COLOR_TYPE, &fSelectionColor,
                     sizeof(rgb_color));
 
+      state.AddBool("shuffle_enabled", fShuffleEnabled);
+      state.AddInt32("repeat_mode", static_cast<int32>(fRepeatMode));
+      state.AddBool("show_tooltips", fShowTooltips);
+
       if (fPlaylistManager && fPlaylistManager->View()) {
         std::vector<BString> playlistOrder =
             fPlaylistManager->View()->GetPlaylistOrder();
@@ -3179,7 +3227,49 @@ void MainWindow::LoadSettings() {
 
         ApplyColors();
 
-        // Extract playlist order while state is in scope
+        bool shuffleEnabled = false;
+        if (state.FindBool("shuffle_enabled", &shuffleEnabled) == B_OK) {
+          fShuffleEnabled = shuffleEnabled;
+          if (fShuffleEnabled && fIconShuffleOn) {
+            fBtnShuffle->SetIcon(fIconShuffleOn, 0);
+          } else if (!fShuffleEnabled && fIconShuffleOff) {
+            fBtnShuffle->SetIcon(fIconShuffleOff, 0);
+          }
+        }
+
+        int32 repeatMode = RepeatOff;
+        if (state.FindInt32("repeat_mode", &repeatMode) == B_OK) {
+          fRepeatMode = static_cast<RepeatMode>(repeatMode);
+          switch (fRepeatMode) {
+          case RepeatAll:
+            if (fIconRepeatAll)
+              fBtnRepeat->SetIcon(fIconRepeatAll, 0);
+            break;
+          case RepeatOne:
+            if (fIconRepeatOne)
+              fBtnRepeat->SetIcon(fIconRepeatOne, 0);
+            break;
+          default:
+            if (fIconRepeatOff)
+              fBtnRepeat->SetIcon(fIconRepeatOff, 0);
+            break;
+          }
+        }
+
+        if (state.FindBool("show_tooltips", &fShowTooltips) == B_OK) {
+          if (fTooltipsOnItem)
+            fTooltipsOnItem->SetMarked(fShowTooltips);
+          if (fTooltipsOffItem)
+            fTooltipsOffItem->SetMarked(!fShowTooltips);
+
+          if (fShowTooltips) {
+            if (fBtnShuffle)
+              fBtnShuffle->SetToolTip("Shuffle");
+            if (fBtnRepeat)
+              fBtnRepeat->SetToolTip("Repeat");
+          }
+        }
+
         std::vector<BString> playlistOrder;
         BString name;
         for (int32 i = 0; state.FindString("playlist_order", i, &name) == B_OK;
@@ -3187,7 +3277,6 @@ void MainWindow::LoadSettings() {
           playlistOrder.push_back(name);
         }
 
-        // Store for later use after playlists are loaded
         fPendingPlaylistOrder = playlistOrder;
       }
     }
@@ -3205,7 +3294,6 @@ void MainWindow::LoadSettings() {
     fPlaylistManager->SetPlaylistFolderPath(fPlaylistPath);
     fPlaylistManager->LoadAvailablePlaylists();
 
-    // Restore playlist order from settings
     if (!fPendingPlaylistOrder.empty()) {
       fPlaylistManager->View()->SetPlaylistOrder(fPendingPlaylistOrder);
       fPendingPlaylistOrder.clear();

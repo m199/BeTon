@@ -70,6 +70,8 @@
 #define MSG_SEEKBAR_COLOR_DROPPED 'sbcd'  ///< Color dropped on SeekBar.
 #define MSG_SELECTION_COLOR_SYSTEM 'scsy' ///< Use system selection color.
 #define MSG_SELECTION_COLOR_MATCH 'scmt'  ///< Match selection to SeekBar color.
+#define MSG_TOOLTIPS_ON 'tton'            ///< Enable tooltips.
+#define MSG_TOOLTIPS_OFF 'ttof'           ///< Disable tooltips.
 ///@}
 
 /** @name Playlist Management */

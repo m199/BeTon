@@ -117,12 +117,14 @@ void InfoPanel::SetCover(BBitmap *bmp) {
 void InfoPanel::ClearCover() {
   if (fCoverView)
     fCoverView->SetBitmap(nullptr);
+
+  if (fMode != Info)
+    Switch(Info);
 }
 
 void InfoPanel::MessageReceived(BMessage *msg) {
   switch (msg->what) {
   case B_COLORS_UPDATED:
-    // Update colors when system theme changes
     SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
     if (fInfoText)
       fInfoText->SetHighColor(ui_color(B_PANEL_TEXT_COLOR));

@@ -161,6 +161,10 @@ private:
   BMenuItem *fViewCoverItem = nullptr;
   InfoPanel *fInfoPanel = nullptr;
 
+  bool fShowTooltips = false;
+  BMenuItem *fTooltipsOnItem = nullptr;
+  BMenuItem *fTooltipsOffItem = nullptr;
+
   ///@}
 
   /** @name Player Icon Bitmaps */
