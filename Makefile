@@ -7,28 +7,31 @@ CC = gcc
 CXX = g++
 
 SRCS = \
-    DirectoryManagerWindow.cpp \
-    Main.cpp \
-    MainWindow.cpp \
-    MediaScanner.cpp \
-    MediaPlaybackController.cpp \
-    NamePrompt.cpp \
-    PlaylistListView.cpp \
-    PlaylistManager.cpp \
-    SeekBarView.cpp \
-    LibraryViewManager.cpp \
     CacheManager.cpp \
     ContentColumnView.cpp \
-    SimpleColumnView.cpp \
-    MetadataHandler.cpp \
-    PlaylistUtils.cpp \
+    CoverView.cpp \
+    DirectoryManagerWindow.cpp \
     InfoPanel.cpp \
-    TagSync.cpp \
-    MusicBrainzClient.cpp \
-    PropertiesWindow.cpp \
+    LibraryViewManager.cpp \
+    Main.cpp \
+    MainWindow.cpp \
     MatcherWindow.cpp \
+    MediaPlaybackController.cpp \
+    MediaScanner.cpp \
+    MetadataHandler.cpp \
+    MusicBrainzClient.cpp \
+    MusicSource.cpp \
+    NamePrompt.cpp \
     PlaylistGeneratorWindow.cpp \
-    CoverView.cpp
+    PlaylistListView.cpp \
+    PlaylistManager.cpp \
+    PlaylistUtils.cpp \
+    PropertiesWindow.cpp \
+    SeekBarView.cpp \
+    SimpleColumnView.cpp \
+    SyncConflictDialog.cpp \
+    SyncSettingsDialog.cpp \
+    TagSync.cpp
 
 LIBS = be translation tag tracker media columnlistview musicbrainz5 network netservices bnetapi shared localestub stdc++
 

@@ -21,6 +21,7 @@
 #define MSG_LAZY_LOAD 'lzld'          ///< Lazy loading trigger.
 #define MSG_DIR_ADD 'dadd'            ///< Add directory to library.
 #define MSG_DIR_REMOVE 'drmv'         ///< Remove directory from library.
+#define MSG_DIR_EDIT 'dedt'           ///< Edit directory sync settings.
 #define MSG_DIR_OK 'doky'             ///< Directory settings confirm.
 ///@}
 
@@ -115,6 +116,7 @@
 #define MSG_PROP_CANCEL 'prcl'         ///< Close properties.
 #define MSG_PROP_SET_COVER_DATA 'pcvd' ///< Set cover image data.
 #define MSG_PROP_REQUEST_COVER 'prcv'  ///< Request cover fetch.
+#define MSG_SET_RATING 'srat'          ///< Set file rating (1-10).
 ///@}
 
 /** @name Cover Art Handling */
@@ -144,6 +146,19 @@
 ///@{
 #define MSG_TEST_MODE 'tstM'       ///< Trigger test mode.
 #define MSG_REGISTER_TARGET 'regt' ///< Register messaging target.
+///@}
+
+/** @name Metadata Sync */
+///@{
+#define MSG_SYNC_SMART 'synt'           ///< Smart Sync (Bidirectional)
+#define MSG_SYNC_PROGRESS 'synP'        ///< Sync progress update
+#define MSG_SYNC_DONE 'synD'            ///< Sync operation complete
+#define MSG_SYNC_CONFLICT 'synC'        ///< Conflict dialog requested
+#define MSG_SYNC_CONFLICT_SKIP 'scsk'   ///< Skip this conflict
+#define MSG_SYNC_CONFLICT_OK 'scok'     ///< Apply choice to this file
+#define MSG_SYNC_CONFLICT_ALBUM 'scal'  ///< Apply choice to album
+#define MSG_SYNC_CONFLICT_ALL 'scaa'    ///< Apply choice to all remaining
+#define MSG_SYNC_SETTINGS_RESULT 'ssre' ///< Sync settings dialog result
 ///@}
 
 #endif // BETON_MESSAGES_H

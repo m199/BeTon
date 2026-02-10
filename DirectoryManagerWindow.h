@@ -10,6 +10,8 @@
 #include <Window.h>
 #include <vector>
 
+class MusicSource;
+
 /**
  * @class DirectoryManagerWindow
  * @brief Window for managing the list of music directories.
@@ -36,7 +38,10 @@ public:
 private:
   void AddDirectory(const entry_ref &ref);
   void RemoveSelectedDirectory();
+  void EditDirectory(int32 index);
   void SaveSettings();
+  void LoadSettings();
+  void MigrateFromOldFormat();
 
   /** @name UI Components */
   ///@{
@@ -49,7 +54,7 @@ private:
 
   /** @name Data */
   ///@{
-  std::vector<BPath> fDirectories;
+  std::vector<MusicSource> fSources;
   BMessenger fCacheManager;
   ///@}
 };

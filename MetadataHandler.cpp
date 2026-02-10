@@ -2,6 +2,7 @@
 #include "CacheManager.h"
 #include "Debug.h"
 #include "Messages.h"
+#include "MusicSource.h"
 #include "TagSync.h"
 
 #include <Alert.h>
@@ -200,4 +201,87 @@ void MetadataHandler::_ProcessDirectoryForCover(const BString &filePath,
       }
     }
   }
+}
+
+/**
+ * @brief Synchronizes metadata between Tags and BFS attributes.
+ *
+ * Reads the MusicSource settings for each file's directory and uses
+ * the configured ConflictMode for merging.
+ *
+ * @param files List of file paths to sync.
+ * @param towardsBfs If true, reads from Tags and writes to BFS.
+ *                   If false, reads from BFS and writes to Tags.
+ */
+void MetadataHandler::SyncMetadata(const std::vector<BString> &files) {
+  for (size_t i = 0; i < files.size(); ++i) {
+    BPath path(files[i].String());
+    MusicSource src = MusicSource::GetSourceForPath(files[i]);
+
+    TagData tags, bfs;
+    TagSync::ReadTags(path, tags);
+    TagSync::ReadBfsAttributes(path, bfs);
+
+    bool primIsBfs = (src.primary == SOURCE_BFS);
+    const TagData &primaryData = primIsBfs ? bfs : tags;
+    const TagData &secondaryData = primIsBfs ? tags : bfs;
+
+    TagData merged;
+    bool conflict = false;
+    bool changed =
+        TagSync::SmartMerge(primaryData, secondaryData, merged, conflict);
+
+    if (conflict && src.conflictMode == CONFLICT_ASK) {
+      DEBUG_PRINT("[MetadataHandler] CONFLICT for: %s\n", path.Path());
+      primaryData.LogDifferences(secondaryData);
+      fflush(stdout);
+
+      BMessage ask(MSG_SYNC_CONFLICT);
+      ask.AddString("path", path.Path());
+      ask.AddInt32("index", i);
+      ask.AddInt32("total", files.size());
+      ask.AddBool("towardsBfs", true);
+      fTarget.SendMessage(&ask);
+      continue;
+    }
+
+    bool canWriteTags =
+        (src.primary == SOURCE_TAGS || src.secondary == SOURCE_TAGS);
+    bool canWriteBfs =
+        (src.primary == SOURCE_BFS || src.secondary == SOURCE_BFS);
+
+    if (canWriteTags) {
+      if (merged.HasDifferences(tags)) {
+        TagSync::WriteTags(path, merged);
+        DEBUG_PRINT("[MetadataHandler] Updated Tags for %s\n", path.Path());
+      }
+    }
+
+    if (canWriteBfs) {
+      if (merged.HasDifferences(bfs)) {
+        TagSync::WriteBfsAttributes(path, merged, nullptr);
+        DEBUG_PRINT("[MetadataHandler] Updated BFS for %s\n", path.Path());
+      }
+    }
+
+    if (changed || conflict) {
+      BMessage update(MSG_MEDIA_ITEM_FOUND);
+      update.AddString("path", path.Path());
+      update.AddString("title", merged.title);
+      update.AddString("artist", merged.artist);
+      update.AddString("album", merged.album);
+      update.AddString("genre", merged.genre);
+      update.AddInt32("year", merged.year);
+      update.AddInt32("track", merged.track);
+      fTarget.SendMessage(&update);
+    }
+
+    BMessage progress(MSG_SYNC_PROGRESS);
+    progress.AddInt32("current", i + 1);
+    progress.AddInt32("total", files.size());
+    fTarget.SendMessage(&progress);
+  }
+
+  BMessage done(MSG_SYNC_DONE);
+  fTarget.SendMessage(&done);
 }

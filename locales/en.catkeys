@@ -1,51 +1,66 @@
-1	English	application/x-vnd.BeTon	2473572400
+1	English	application/x-vnd.BeTon	3826593758
 Searching...	PropertiesWindow		Searching...
+Syncing... %ld/%ld	MainWindow		Syncing... %ld/%ld
 Generate New Playlist	MainWindow		Generate New Playlist
 Add	DirectoryManagerWindow		Add
 Cancelled.	PropertiesWindow		Cancelled.
 Playlists	MainWindow		Playlists
 Apply	PropertiesWindow		Apply
+Cancel	SyncConflictDialog		Cancel
 Manage Music Folders	DirectoryManagerWindow		Manage Music Folders
 Loading Music Library...	MainWindow		Loading Music Library...
+Syncing metadata...	MainWindow		Syncing metadata...
 Channels: 	MainWindow		Channels: 
-Match tracks (right) to files (left).	MatcherWindow		Match tracks (right) to files (left).
 Results received.	PropertiesWindow		Results received.
+Match tracks (right) to files (left).	MatcherWindow		Match tracks (right) to files (left).
+Loading cache... %ld/%zu	MainWindow		Loading cache... %ld/%zu
 Up	MatcherWindow		Up
+File %ld of %ld	SyncConflictDialog		File %ld of %ld
 NOT 	PlaylistGeneratorWindow		NOT 
+%ld  tracks. Total duration %02d:%02d:%02d	MainWindow		%ld  tracks. Total duration %02d:%02d:%02d
 Name:	PlaylistGeneratorWindow		Name:
 Track	ContentColumnView		Track
 Generate Playlist	PlaylistGeneratorWindow		Generate Playlist
 Composer:	PropertiesWindow		Composer:
-: %zu Titel.	MainWindow		: %zu Titel.
-Album: 	MainWindow		Album: 
 MusicBrainz	PropertiesWindow		MusicBrainz
+Album: 	MainWindow		Album: 
 No Genre	LibraryViewManager		No Genre
 Adjust Album Matching	MatcherWindow		Adjust Album Matching
+Configure metadata synchronization:	SyncSettingsDialog		Configure metadata synchronization:
+Secondary Source:	SyncSettingsDialog		Secondary Source:
 Title	ContentColumnView		Title
+(limited)	MainWindow		(limited)
+No files selected	MainWindow		No files selected
+Scanning: %ld folders, %ld files	MainWindow		Scanning: %ld folders, %ld files
 MusicBrainz Tracks:	MatcherWindow		MusicBrainz Tracks:
 Remove from Playlist	ContentColumnView		Remove from Playlist
+Playlist-Folder set: %s	MainWindow		Playlist-Folder set: %s
 MB Track ID:	PropertiesWindow		MB Track ID:
-Scanning: %d folders, %d files	MainWindow		Scanning: %d folders, %d files
 Genre: 	MainWindow		Genre: 
 Cancel	MatcherWindow		Cancel
+Synchronize Metadata	MainWindow		Synchronize Metadata
 Duration	ContentColumnView		Duration
 Play	ContentColumnView		Play
 Add	PlaylistGeneratorWindow		Add
 Bitrate	ContentColumnView		Bitrate
 Year: 	PlaylistGeneratorWindow		Year: 
-%d tracks	MainWindow		%d tracks
 New Playlist...	ContentColumnView		New Playlist...
+%ld tracks	MainWindow		%ld tracks
 ◀ Previous	PropertiesWindow		◀ Previous
+Conflict Resolution:	SyncSettingsDialog		Conflict Resolution:
 Properties	PropertiesWindow		Properties
+Artist: 	SyncConflictDialog		Artist: 
 Cancelled by user.	MainWindow		Cancelled by user.
+Apply	SyncConflictDialog		Apply
 Artist:	PropertiesWindow		Artist:
 Generate	PlaylistGeneratorWindow		Generate
+Delete	PlaylistListView		Delete
 Genre:	PlaylistGeneratorWindow		Genre:
 Metadata applied successfully (Auto-Match).	MainWindow		Metadata applied successfully (Auto-Match).
-Delete	PlaylistListView		Delete
+Metadata Conflict	SyncConflictDialog		Metadata Conflict
 Artwork	MainWindow		Artwork
-MusicBrainz: %zu hits.	MainWindow		MusicBrainz: %zu hits.
 No Title	MainWindow		No Title
+MusicBrainz: %zu hits.	MainWindow		MusicBrainz: %zu hits.
 Appearance	MainWindow		Appearance
 Genre	ContentColumnView		Genre
 Artist: 	PlaylistGeneratorWindow		Artist: 
@@ -53,28 +68,33 @@ Rescan started...	MainWindow		Rescan started...
 Ready.	PropertiesWindow		Ready.
 Remove	DirectoryManagerWindow		Remove
 Genre: 	PlaylistGeneratorWindow		Genre: 
+Primary Source:	SyncSettingsDialog		Primary Source:
 Load Cover...	PropertiesWindow		Load Cover...
 Fetching metadata...	PropertiesWindow		Fetching metadata...
+Show All Genre	LibraryViewManager		Show All Genre
 Ready.	MainWindow		Ready.
-Set Playlist Folder	MainWindow		Set Playlist Folder
+Apply to All	SyncConflictDialog		Apply to All
 Cancel	PropertiesWindow		Cancel
+Set Playlist Folder	MainWindow		Set Playlist Folder
 Album Artist:	PropertiesWindow		Album Artist:
 Shuffle Playback	PlaylistGeneratorWindow		Shuffle Playback
 OK	DirectoryManagerWindow		OK
-Scanning: %d folders, %d files (%02d:%02d)	MainWindow		Scanning: %d folders, %d files (%02d:%02d)
 Help	MainWindow		Help
 Year:	PropertiesWindow		Year:
 Max. Tracks	PlaylistGeneratorWindow		Max. Tracks
 Year	PlaylistGeneratorWindow		Year
 File Information	InfoPanel		File Information
-%d Titel. Gesamtdauer %02d:%02d:%02d	MainWindow		%d Titel. Gesamtdauer %02d:%02d:%02d
 Searching on MusicBrainz...	MainWindow		Searching on MusicBrainz...
+Scan completed in %02d:%02d, %ld new files	MainWindow		Scan completed in %02d:%02d, %ld new files
 New Playlist	MainWindow		New Playlist
+%ld  tracks. Total duration %02d:%02d	MainWindow		%ld  tracks. Total duration %02d:%02d
 Metadata applied successfully (Manual).	MainWindow		Metadata applied successfully (Manual).
 Disc:	PropertiesWindow		Disc:
-New Playlist	PlaylistGeneratorWindow		New Playlist
+Use Tags	SyncConflictDialog		Use Tags
 Rename	PlaylistListView		Rename
+New Playlist	PlaylistGeneratorWindow		New Playlist
 Path	ContentColumnView		Path
+Playlist '%s' created	MainWindow		Playlist '%s' created
 Generated Playlist	MainWindow		Generated Playlist
 From:	PlaylistGeneratorWindow		From:
 not	PlaylistGeneratorWindow		not
@@ -82,7 +102,7 @@ MB Album ID:	PropertiesWindow		MB Album ID:
 Year: 	MainWindow		Year: 
 Artist	ContentColumnView		Artist
 Fetch from MusicBrainz	PropertiesWindow		Fetch from MusicBrainz
-(Gemischt)	MainWindow		(Gemischt)
+OK	SyncSettingsDialog		OK
 Artist:\nAlbum:\nTitle:\nYear:\nGenre:\n\nBitrate:\nSample Rate:\nChannels:	InfoPanel		Artist:\nAlbum:\nTitle:\nYear:\nGenre:\n\nBitrate:\nSample Rate:\nChannels:
 Remove	PlaylistGeneratorWindow		Remove
 MusicBrainz: Nothing found.	MainWindow		MusicBrainz: Nothing found.
@@ -91,79 +111,90 @@ No Album	LibraryViewManager		No Album
 Next ▶	PropertiesWindow		Next ▶
 Cancel	PlaylistGeneratorWindow		Cancel
 Move Down	ContentColumnView		Move Down
-Playlist '%s' erstellt	MainWindow		Playlist '%s' erstellt
 Rule List	PlaylistGeneratorWindow		Rule List
-(Limitiert)	MainWindow		(Limitiert)
+Use BFS	SyncConflictDialog		Use BFS
 Loading...	MainWindow		Loading...
+: %zu tracks.	MainWindow		: %zu tracks.
 Quit	MainWindow		Quit
 Manage Cover (Multi-selection: Drop image to set for all)	PropertiesWindow		Manage Cover (Multi-selection: Drop image to set for all)
-Playlist-Ordner gesetzt: %s	MainWindow		Playlist-Ordner gesetzt: %s
 Apply	MatcherWindow		Apply
 Add to Playlist	ContentColumnView		Add to Playlist
 Album Functions	PropertiesWindow		Album Functions
 System Default	MainWindow		System Default
-Loading cache... %d/%zu	MainWindow		Loading cache... %d/%zu
+Sync cancelled	MainWindow		Sync cancelled
 Properties - 	PropertiesWindow		Properties - 
-%d Titel. Gesamtdauer %02d:%02d	MainWindow		%d Titel. Gesamtdauer %02d:%02d
 Album Artist	ContentColumnView		Album Artist
 Move Up	ContentColumnView		Move Up
 Cancelled.	MainWindow		Cancelled.
+Cancel	SyncSettingsDialog		Cancel
 Value:	PlaylistGeneratorWindow		Value:
 Cancel	NamePrompt		Cancel
 Year	ContentColumnView		Year
+Tags	SyncConflictDialog		Tags
 Limit:	PlaylistGeneratorWindow		Limit:
 Bitrate: 	MainWindow		Bitrate: 
 Match SeekBar	MainWindow		Match SeekBar
+Sync complete	MainWindow		Sync complete
 File	MainWindow		File
 Error: No data received	MatcherWindow		Error: No data received
-Details	PropertiesWindow		Details
 Artwork	PropertiesWindow		Artwork
+Details	PropertiesWindow		Details
 Album:	PropertiesWindow		Album:
  Files	PropertiesWindow		 Files
+(mixed)	MainWindow		(mixed)
 Off	MainWindow		Off
 Disc	ContentColumnView		Disc
-Scan completed in %02d:%02d, %d new files	MainWindow		Scan completed in %02d:%02d, %d new files
-Show all	LibraryViewManager		Show all
+Sync Settings	SyncSettingsDialog		Sync Settings
 Add to Album	PropertiesWindow		Add to Album
 Artist: 	MainWindow		Artist: 
-%d tracks. Total duration %02d:%02d	MainWindow		%d tracks. Total duration %02d:%02d
+%ld tracks. Total duration %02d:%02d	MainWindow		%ld tracks. Total duration %02d:%02d
 Apply Selection (Album)	PropertiesWindow		Apply Selection (Album)
 Title: 	MainWindow		Title: 
 Comment:	PropertiesWindow		Comment:
 No Artist	LibraryViewManager		No Artist
 Rescan	MainWindow		Rescan
+Show All Album	LibraryViewManager		Show All Album
 Artist:\nAlbum:\nTitle:\nYear:\nGenre:\n\nBitrate:\nSample Rate:\nChannels:	MainWindow		Artist:\nAlbum:\nTitle:\nYear:\nGenre:\n\nBitrate:\nSample Rate:\nChannels:
+Fetching metadata from MusicBrainz...	MainWindow		Fetching metadata from MusicBrainz...
 Define Rule	PlaylistGeneratorWindow		Define Rule
 of	PropertiesWindow		of
 Manage Music Folders	MainWindow		Manage Music Folders
-%d tracks. Total duration %02d:%02d:%02d	MainWindow		%d tracks. Total duration %02d:%02d:%02d
-<-- No Match -->	MatcherWindow		<-- No Match -->
+Metadata successfully saved.	MainWindow		Metadata successfully saved.
+BFS Attributes	SyncConflictDialog		BFS Attributes
+%ld tracks. Total duration %02d:%02d:%02d	MainWindow		%ld tracks. Total duration %02d:%02d:%02d
 Track:	PropertiesWindow		Track:
+<-- No Match -->	MatcherWindow		<-- No Match -->
 About BeTon…	MainWindow		About BeTon…
-Sample Rate: 	MainWindow		Sample Rate: 
 Playlist	NamePrompt		Playlist
+Sample Rate: 	MainWindow		Sample Rate: 
 Remove Cover	PropertiesWindow		Remove Cover
 Manage Cover	PropertiesWindow		Manage Cover
 Error: Release ID not found.	MainWindow		Error: Release ID not found.
 <no playlists>	ContentColumnView		<no playlists>
+Album: 	SyncConflictDialog		Album: 
 To:	PlaylistGeneratorWindow		To:
 Apply Selection (Track)	PropertiesWindow		Apply Selection (Track)
-No Limit	PlaylistGeneratorWindow		No Limit
 Title:	PropertiesWindow		Title:
+No Limit	PlaylistGeneratorWindow		No Limit
+Scanning: %ld folders, %ld files (%02d:%02d)	MainWindow		Scanning: %ld folders, %ld files (%02d:%02d)
 Name:	NamePrompt		Name:
+Title: 	SyncConflictDialog		Title: 
+Show All Artist	LibraryViewManager		Show All Artist
 Files:	MatcherWindow		Files:
 Criterion:	PlaylistGeneratorWindow		Criterion:
+Tooltips	MainWindow		Tooltips
+Rating updated.	MainWindow		Rating updated.
 Save	PropertiesWindow		Save
 Genre	PlaylistGeneratorWindow		Genre
 Remove from Album	PropertiesWindow		Remove from Album
-On	MainWindow		On
 Selection Color	MainWindow		Selection Color
+On	MainWindow		On
 Search	PropertiesWindow		Search
-Metadaten erfolgreich gespeichert.	MainWindow		Metadata saved.
 Artist	PlaylistGeneratorWindow		Artist
 Show in Tracker	ContentColumnView		Show in Tracker
 Properties...	ContentColumnView		Properties...
 Album	ContentColumnView		Album
+Rating	ContentColumnView		Rating
+Genre:	PropertiesWindow		Genre:
 Max. Duration (Min)	PlaylistGeneratorWindow		Max. Duration (Min)
 Down	MatcherWindow		Down
-Genre:	PropertiesWindow		Genre:

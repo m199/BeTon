@@ -1,5 +1,6 @@
 #include "TagSync.h"
 #include "Debug.h"
+#include "MusicSource.h"
 
 #include <cmath>
 #include <cstdio>
@@ -23,6 +24,7 @@
 #include <taglib/mp4file.h>
 #include <taglib/mp4tag.h>
 #include <taglib/mpegfile.h>
+#include <taglib/popularimeterframe.h>
 #include <taglib/tag.h>
 #include <taglib/textidentificationframe.h>
 #include <taglib/tfile.h>
@@ -33,7 +35,9 @@
  * @brief Converts a TagLib::String to a BString.
  */
 static inline BString TL(const TagLib::String &s) {
-  return BString(s.to8Bit(true).c_str());
+  BString str(s.to8Bit(true).c_str());
+  str.Trim();
+  return str;
 }
 
 /**
@@ -60,7 +64,7 @@ static uint32 _toUInt(const TagLib::String &s) {
 }
 
 /**
- * @brief Parses a slash-separated string pair (e.g., "1/10") into two integers.
+ * @brief Parses a slash-separated string pair (e.g., "1/10"  into two integers.
  */
 static void _parsePair(const TagLib::String &s, uint32 &first, uint32 &second) {
   first = second = 0;
@@ -77,6 +81,24 @@ static void _parsePair(const TagLib::String &s, uint32 &first, uint32 &second) {
   TagLib::String b(slash + 1, TagLib::String::UTF8);
   first = _toUInt(a);
   second = _toUInt(b);
+}
+
+/**
+ * @brief Trims leading and trailing whitespace from a BString in place.
+ */
+static void _trimBString(BString &s) {
+  while (s.Length() > 0 &&
+         (s[0] == ' ' || s[0] == '\t' || s[0] == '\n' || s[0] == '\r')) {
+    s.Remove(0, 1);
+  }
+  while (s.Length() > 0) {
+    char last = s[s.Length() - 1];
+    if (last == ' ' || last == '\t' || last == '\n' || last == '\r') {
+      s.Truncate(s.Length() - 1);
+    } else {
+      break;
+    }
+  }
 }
 
 /**
@@ -135,6 +157,70 @@ static const char *sniff_mime(const uint8 *d, size_t n) {
 }
 
 /**
+ * @brief Maps an internal rating (0-10) to a byte value (0-255).
+ * Windows Explorer style:
+ * 1* = 1, 2* = 64, 3* = 128, 4* = 196, 5* = 255.
+ * We interpolate for half stars.
+ */
+static uint8_t _ratingToByte(uint32 rating) {
+  if (rating == 0)
+    return 0;
+  if (rating >= 10)
+    return 255;
+
+  switch (rating) {
+  case 1:
+    return 1;
+  case 2:
+    return 64;
+  case 3:
+    return 96;
+  case 4:
+    return 128;
+  case 5:
+    return 160;
+  case 6:
+    return 196;
+  case 7:
+    return 208;
+  case 8:
+    return 224;
+  case 9:
+    return 240;
+  case 10:
+    return 255;
+  }
+  return 0;
+}
+
+/**
+ * @brief Maps a byte rating (0-255) to internal rating (0-10).
+ */
+static uint32 _byteToRating(uint8_t val) {
+  if (val == 0)
+    return 0;
+  if (val < 8)
+    return 1;
+  if (val < 64)
+    return 2;
+  if (val < 96)
+    return 3;
+  if (val < 128)
+    return 4;
+  if (val < 160)
+    return 5;
+  if (val < 196)
+    return 6;
+  if (val < 208)
+    return 7;
+  if (val < 224)
+    return 8;
+  if (val < 240)
+    return 9;
+  return 10;
+}
+
+/**
  * @brief Reads metadata from a file into a TagData struct.
  * @param path The file path to read from.
  * @param out Output structure for metadata.
@@ -144,11 +230,10 @@ bool TagSync::ReadTags(const BPath &path, TagData &out) {
   if (path.InitCheck() != B_OK)
     return false;
 
-  TagLib::FileRef fr(path.Path());
-  {
-    if (fr.isNull())
-      return false;
+  bool foundData = false;
 
+  TagLib::FileRef fr(path.Path());
+  if (!fr.isNull()) {
     if (TagLib::Tag *t = fr.tag()) {
       out.title = TL(t->title());
       out.artist = TL(t->artist());
@@ -157,6 +242,7 @@ bool TagSync::ReadTags(const BPath &path, TagData &out) {
       out.comment = TL(t->comment());
       out.year = t->year();
       out.track = t->track();
+      foundData = true;
     }
 
     if (const TagLib::AudioProperties *ap = fr.audioProperties()) {
@@ -165,6 +251,7 @@ bool TagSync::ReadTags(const BPath &path, TagData &out) {
       out.bitrate = ap->bitrate();
       out.sampleRate = ap->sampleRate();
       out.channels = ap->channels();
+      foundData = true;
     }
 
     if (fr.file()) {
@@ -210,6 +297,18 @@ bool TagSync::ReadTags(const BPath &path, TagData &out) {
           out.discTotal = tot;
       }
 
+      if (out.rating == 0) {
+        TagLib::String r = _getTL(pm, {"RATING", "rating"});
+        if (!r.isEmpty()) {
+          int v = _toUInt(r);
+          if (v > 10)
+            v /= 10;
+          if (v > 5)
+            v = 5;
+          out.rating = v * 2;
+        }
+      }
+
       out.mbAlbumID =
           _getStr(pm, {"MUSICBRAINZ_ALBUMID", "MusicBrainz Album Id"});
       out.mbArtistID =
@@ -223,6 +322,20 @@ bool TagSync::ReadTags(const BPath &path, TagData &out) {
     TagLib::MPEG::File mf(path.Path());
     if (mf.isOpen()) {
       if (TagLib::ID3v2::Tag *id3 = mf.ID3v2Tag()) {
+        const TagLib::ID3v2::FrameList &popm = id3->frameList("POPM");
+        if (!popm.isEmpty()) {
+          for (auto *f : popm) {
+            TagLib::ID3v2::PopularimeterFrame *pf =
+                dynamic_cast<TagLib::ID3v2::PopularimeterFrame *>(f);
+            if (pf) {
+              out.rating = _byteToRating(pf->rating());
+
+              if (pf->email() == "Windows Media Player 9 Series")
+                break;
+            }
+          }
+        }
+
         const TagLib::ID3v2::FrameList &txxx = id3->frameList("TXXX");
         for (auto it = txxx.begin(); it != txxx.end(); ++it) {
           TagLib::ID3v2::UserTextIdentificationFrame *u =
@@ -248,13 +361,6 @@ bool TagSync::ReadTags(const BPath &path, TagData &out) {
             val = "";
           }
 
-          DEBUG_PRINT("[TagSync] TXXX Found: desc='%s' (Freq=%lu)\\n",
-                      TL(u->description()).String(), (unsigned long)fl.size());
-          for (uint32 k = 0; k < fl.size(); k++) {
-            DEBUG_PRINT("   -> Field[%lu]: '%s'\\n", (unsigned long)k,
-                        TL(fl[k]).String());
-          }
-
           if (desc.ICompare("MusicBrainz Album Id") == 0)
             out.mbAlbumID = val;
           else if (desc.ICompare("MusicBrainz Artist Id") == 0)
@@ -267,30 +373,7 @@ bool TagSync::ReadTags(const BPath &path, TagData &out) {
             out.acoustId = val;
         }
 
-        if (out.track == 0 || out.trackTotal == 0) {
-          const TagLib::ID3v2::FrameList &l = id3->frameList("TRCK");
-          if (!l.isEmpty()) {
-            TagLib::String s = l.front()->toString();
-            uint32 n = 0, t = 0;
-            _parsePair(s, n, t);
-            if (out.track == 0)
-              out.track = n;
-            if (out.trackTotal == 0)
-              out.trackTotal = t;
-          }
-        }
-        if (out.disc == 0 || out.discTotal == 0) {
-          const TagLib::ID3v2::FrameList &l = id3->frameList("TPOS");
-          if (!l.isEmpty()) {
-            TagLib::String s = l.front()->toString();
-            uint32 n = 0, t = 0;
-            _parsePair(s, n, t);
-            if (out.disc == 0)
-              out.disc = n;
-            if (out.discTotal == 0)
-              out.discTotal = t;
-          }
-        }
+        foundData = true;
       }
     }
   }
@@ -300,130 +383,71 @@ bool TagSync::ReadTags(const BPath &path, TagData &out) {
     if (mf.isValid() && mf.tag()) {
       TagLib::MP4::Tag *tag = mf.tag();
 
-      if (tag->contains("trkn")) {
-        TagLib::MP4::Item::IntPair p = tag->item("trkn").toIntPair();
-        if (p.first > 0 && out.track == 0)
-          out.track = p.first;
-        if (p.second > 0 && out.trackTotal == 0)
-          out.trackTotal = p.second;
-      }
-
-      if (tag->contains("disk")) {
-        TagLib::MP4::Item::IntPair p = tag->item("disk").toIntPair();
-        if (p.first > 0 && out.disc == 0)
-          out.disc = p.first;
-        if (p.second > 0 && out.discTotal == 0)
-          out.discTotal = p.second;
-      }
-
-      auto getFree = [&](const char *name) {
-        TagLib::String key = TagLib::String("----:com.apple.iTunes:") +
-                             TagLib::String(name, TagLib::String::UTF8);
-        if (tag->contains(key)) {
-          TagLib::StringList sl = tag->item(key).toStringList();
-          if (!sl.isEmpty()) {
-            BString val = TL(sl.front());
-            printf("[TagSync] MP4 Atom Found: key='%s' val='%s'\\n",
-                   key.to8Bit(true).c_str(), val.String());
-            return val;
+      if (tag->contains("rate")) {
+        TagLib::MP4::Item item = tag->item("rate");
+        if (item.toInt() > 0) {
+          int val = item.toInt();
+          if (val > 0 && val <= 100) {
+            out.rating = (val + 5) / 10;
+          } else if (val > 100) {
+            out.rating = _byteToRating(val);
           }
-        } else {
-          printf("[TagSync] MP4 Atom MISSING: key='%s'\\n",
-                 key.to8Bit(true).c_str());
-        }
-        return BString();
-      };
-
-      if (tag) {
-        const TagLib::MP4::ItemMap &map = tag->itemMap();
-        for (auto it = map.begin(); it != map.end(); ++it) {
-          printf("[TagSync] MP4 Item: '%s'\\n", it->first.to8Bit(true).c_str());
         }
       }
 
-      BString s;
-      if (out.mbAlbumID.IsEmpty() &&
-          !(s = getFree("MusicBrainz Album Id")).IsEmpty())
-        out.mbAlbumID = s;
-      if (out.mbArtistID.IsEmpty() &&
-          !(s = getFree("MusicBrainz Artist Id")).IsEmpty())
-        out.mbArtistID = s;
-      if (out.mbTrackID.IsEmpty() &&
-          !(s = getFree("MusicBrainz Track Id")).IsEmpty())
-        out.mbTrackID = s;
+      foundData = true;
     }
   }
 
-  return true;
-}
+  TagData bfsData;
+  if (ReadBfsAttributes(path, bfsData)) {
+    if (out.title.IsEmpty())
+      out.title = bfsData.title;
+    if (out.artist.IsEmpty())
+      out.artist = bfsData.artist;
+    if (out.album.IsEmpty())
+      out.album = bfsData.album;
+    if (out.genre.IsEmpty())
+      out.genre = bfsData.genre;
+    if (out.comment.IsEmpty())
+      out.comment = bfsData.comment;
+    if (out.year == 0)
+      out.year = bfsData.year;
+    if (out.track == 0)
+      out.track = bfsData.track;
+    if (out.trackTotal == 0)
+      out.trackTotal = bfsData.trackTotal;
+    if (out.disc == 0)
+      out.disc = bfsData.disc;
+    if (out.discTotal == 0)
+      out.discTotal = bfsData.discTotal;
+    if (out.albumArtist.IsEmpty())
+      out.albumArtist = bfsData.albumArtist;
+    if (out.composer.IsEmpty())
+      out.composer = bfsData.composer;
+    if (out.mbAlbumID.IsEmpty())
+      out.mbAlbumID = bfsData.mbAlbumID;
+    if (out.mbArtistID.IsEmpty())
+      out.mbArtistID = bfsData.mbArtistID;
+    if (out.mbTrackID.IsEmpty())
+      out.mbTrackID = bfsData.mbTrackID;
 
-static bool write_attr_int(BNode &n, const char *name, int32 v) {
-  return n.WriteAttr(name, B_INT32_TYPE, 0, &v, sizeof(v)) ==
-         (ssize_t)sizeof(v);
-}
-static bool write_attr_str(BNode &n, const char *name, const BString &s) {
-  return n.WriteAttr(name, B_STRING_TYPE, 0, s.String(), s.Length() + 1) ==
-         (ssize_t)(s.Length() + 1);
-}
-static bool remove_attr(BNode &n, const char *name) {
-  const status_t st = n.RemoveAttr(name);
-  return st == B_OK || st == B_ENTRY_NOT_FOUND;
-}
+    if (out.lengthSec == 0)
+      out.lengthSec = bfsData.lengthSec;
+    if (out.bitrate == 0)
+      out.bitrate = bfsData.bitrate;
+    if (out.sampleRate == 0)
+      out.sampleRate = bfsData.sampleRate;
+    if (out.channels == 0)
+      out.channels = bfsData.channels;
 
-static bool write_attr_str_opt(BNode &n, const char *key, const BString &s) {
-  if (s.IsEmpty())
-    return remove_attr(n, key);
-  return write_attr_str(n, key, s);
-}
-static bool write_attr_uint_opt(BNode &n, const char *key, uint32 v,
-                                bool keepZero = false) {
-  if (!keepZero && v == 0)
-    return remove_attr(n, key);
-  return write_attr_int(n, key, (int32)v);
-}
+    if (out.rating == 0)
+      out.rating = bfsData.rating;
 
-bool TagSync::WriteBfsAttributes(const BPath &path, const TagData &td,
-                                 const CoverBlob *, size_t) {
-  BEntry e(path.Path());
-  if (!e.Exists()) {
-    DEBUG_PRINT("[bfs] file not found: %s\\n", path.Path());
-    return false;
+    foundData = true;
   }
-  BNode n(&e);
-  if (n.InitCheck() != B_OK) {
-    DEBUG_PRINT("[bfs] BNode init failed for %s\\n", path.Path());
-    return false;
-  }
 
-  bool ok = true;
-
-  ok &= write_attr_str_opt(n, "Media:Title", td.title);
-  ok &= write_attr_str_opt(n, "Audio:Artist", td.artist);
-  ok &= write_attr_str_opt(n, "Audio:Album", td.album);
-  ok &= write_attr_str_opt(n, "Media:Genre", td.genre);
-  ok &= write_attr_str_opt(n, "Media:Comment", td.comment);
-
-  ok &= write_attr_uint_opt(n, "Media:Year", td.year);
-  ok &= write_attr_uint_opt(n, "Audio:Track", td.track);
-
-  ok &= write_attr_uint_opt(n, "Media:Length", td.lengthSec);
-  ok &= write_attr_uint_opt(n, "Audio:Bitrate", td.bitrate);
-  ok &= write_attr_uint_opt(n, "Audio:Rate", td.sampleRate);
-  ok &= write_attr_uint_opt(n, "Audio:Channels", td.channels);
-
-  ok &= write_attr_str_opt(n, "Media:AlbumArtist", td.albumArtist);
-  ok &= write_attr_str_opt(n, "Media:Composer", td.composer);
-  ok &= write_attr_uint_opt(n, "Media:TrackTotal", td.trackTotal);
-  ok &= write_attr_uint_opt(n, "Media:Disc", td.disc);
-  ok &= write_attr_uint_opt(n, "Media:DiscTotal", td.discTotal);
-
-  ok &= write_attr_str_opt(n, "Media:MBAlbumID", td.mbAlbumID);
-  ok &= write_attr_str_opt(n, "Media:MBArtistID", td.mbArtistID);
-  ok &= write_attr_str_opt(n, "Media:MBTrackID", td.mbTrackID);
-  ok &= write_attr_str_opt(n, "Media::AAID", td.acoustId);
-
-  DEBUG_PRINT("[bfs] write attrs %s: %s\\n", path.Path(), ok ? "OK" : "FAILED");
-  return ok;
+  return foundData;
 }
 
 static void set_basic_tags(TagLib::Tag *t, const TagData &td) {
@@ -454,6 +478,31 @@ bool TagSync::WriteTagsToFile(const BPath &path, const TagData &td,
     TagLib::ID3v2::Tag *id3 = f.ID3v2Tag(true);
     set_basic_tags(id3 ? static_cast<TagLib::Tag *>(id3) : f.tag(), td);
 
+    if (id3) {
+      const TagLib::ID3v2::FrameList &popm = id3->frameList("POPM");
+      for (auto *frame : popm) {
+        id3->removeFrame(frame, true);
+      }
+
+      if (td.rating > 0) {
+        TagLib::ID3v2::PopularimeterFrame *pf =
+            new TagLib::ID3v2::PopularimeterFrame();
+
+        /**
+         * @brief Set the email to "Windows Media Player 9 Series".
+         *
+         * This specific string is required by Windows Explorer, Windows Media
+         * Player, and many other players associated with the Windows ecosystem
+         * to recognize and display the rating (star) field. Using other email
+         * strings often results in the rating being ignored by these
+         * applications. Its ridiculous!
+         */
+        pf->setEmail("Windows Media Player 9 Series");
+        pf->setRating(_ratingToByte(td.rating));
+        id3->addFrame(pf);
+      }
+    }
+
     auto setTXXX = [&](const char *desc, const BString &val) {
       if (!id3)
         return;
@@ -474,26 +523,14 @@ bool TagSync::WriteTagsToFile(const BPath &path, const TagData &td,
         id3->removeFrame(f, true);
       }
 
-      DEBUG_PRINT("[TagSync] setTXXX: '%s' -> '%s' (Removed %lu old frames)\\n",
-                  desc, val.String(), (unsigned long)toRemove.size());
-
       if (!val.IsEmpty()) {
         auto *frame = new TagLib::ID3v2::UserTextIdentificationFrame(
             d, TagLib::StringList(TLs(val)));
         id3->addFrame(frame);
-
-        TagLib::String checkVal = frame->fieldList().isEmpty()
-                                      ? TagLib::String()
-                                      : frame->fieldList().front();
-        DEBUG_PRINT("[TagSync] setTXXX: Set '%s', Immediate Check: '%s' "
-                    "(ListSize %lu)\\n",
-                    val.String(), checkVal.toCString(true),
-                    (unsigned long)frame->fieldList().size());
       }
     };
 
     if (id3) {
-
       {
         TagLib::ID3v2::TextIdentificationFrame *fr =
             dynamic_cast<TagLib::ID3v2::TextIdentificationFrame *>(
@@ -609,17 +646,11 @@ bool TagSync::WriteTagsToFile(const BPath &path, const TagData &td,
         tag->removeItem(key);
     }
 
-    {
-
-      tag->setItem("trkn",
-                   TagLib::MP4::Item((int)td.track, (int)td.trackTotal));
-    }
-
+    tag->setItem("trkn", TagLib::MP4::Item((int)td.track, (int)td.trackTotal));
     tag->setItem("disk", TagLib::MP4::Item((int)td.disc, (int)td.discTotal));
 
     auto setFreeform = [&](const char *name, const BString &val) {
       if (val.IsEmpty()) {
-
         if (tag->contains(name))
           tag->removeItem(name);
       } else {
@@ -633,6 +664,13 @@ bool TagSync::WriteTagsToFile(const BPath &path, const TagData &td,
     setFreeform("MusicBrainz Album Id", td.mbAlbumID);
     setFreeform("MusicBrainz Artist Id", td.mbArtistID);
     setFreeform("MusicBrainz Track Id", td.mbTrackID);
+
+    if (td.rating > 0) {
+      uint32 percentage = td.rating * 10;
+      tag->setItem("rate", TagLib::MP4::Item((int)percentage));
+    } else {
+      tag->removeItem("rate");
+    }
 
     return f.save();
   }
@@ -708,6 +746,77 @@ bool TagSync::IsBeFsVolume(const BPath &path) {
   return strcmp(info.fsh_name, "bfs") == 0;
 }
 
+static bool write_attr_int(BNode &n, const char *name, int32 v) {
+  return n.WriteAttr(name, B_INT32_TYPE, 0, &v, sizeof(v)) ==
+         (ssize_t)sizeof(v);
+}
+static bool write_attr_str(BNode &n, const char *name, const BString &s) {
+  return n.WriteAttr(name, B_STRING_TYPE, 0, s.String(), s.Length() + 1) ==
+         (ssize_t)(s.Length() + 1);
+}
+static bool remove_attr(BNode &n, const char *name) {
+  const status_t st = n.RemoveAttr(name);
+  return st == B_OK || st == B_ENTRY_NOT_FOUND;
+}
+
+static bool write_attr_str_opt(BNode &n, const char *key, const BString &s) {
+  if (s.IsEmpty())
+    return remove_attr(n, key);
+  return write_attr_str(n, key, s);
+}
+static bool write_attr_uint_opt(BNode &n, const char *key, uint32 v,
+                                bool keepZero = false) {
+  if (!keepZero && v == 0)
+    return remove_attr(n, key);
+  return write_attr_int(n, key, (int32)v);
+}
+
+bool TagSync::WriteBfsAttributes(const BPath &path, const TagData &td,
+                                 const CoverBlob *, size_t) {
+  BEntry e(path.Path());
+  if (!e.Exists()) {
+    DEBUG_PRINT("[bfs] file not found: %s\\n", path.Path());
+    return false;
+  }
+  BNode n(&e);
+  if (n.InitCheck() != B_OK) {
+    DEBUG_PRINT("[bfs] BNode init failed for %s\\n", path.Path());
+    return false;
+  }
+
+  bool ok = true;
+
+  ok &= write_attr_str_opt(n, "Media:Title", td.title);
+  ok &= write_attr_str_opt(n, "Audio:Artist", td.artist);
+  ok &= write_attr_str_opt(n, "Audio:Album", td.album);
+  ok &= write_attr_str_opt(n, "Media:Genre", td.genre);
+  ok &= write_attr_str_opt(n, "Media:Comment", td.comment);
+
+  ok &= write_attr_uint_opt(n, "Media:Year", td.year);
+  ok &= write_attr_uint_opt(n, "Audio:Track", td.track);
+
+  ok &= write_attr_uint_opt(n, "Media:Length", td.lengthSec);
+  ok &= write_attr_uint_opt(n, "Audio:Bitrate", td.bitrate);
+  ok &= write_attr_uint_opt(n, "Audio:Rate", td.sampleRate);
+  ok &= write_attr_uint_opt(n, "Audio:Channels", td.channels);
+
+  ok &= write_attr_str_opt(n, "Media:AlbumArtist", td.albumArtist);
+  ok &= write_attr_str_opt(n, "Media:Composer", td.composer);
+  ok &= write_attr_uint_opt(n, "Media:TrackTotal", td.trackTotal);
+  ok &= write_attr_uint_opt(n, "Media:Disc", td.disc);
+  ok &= write_attr_uint_opt(n, "Media:DiscTotal", td.discTotal);
+
+  ok &= write_attr_str_opt(n, "Media:MBAlbumID", td.mbAlbumID);
+  ok &= write_attr_str_opt(n, "Media:MBArtistID", td.mbArtistID);
+  ok &= write_attr_str_opt(n, "Media:MBTrackID", td.mbTrackID);
+  ok &= write_attr_str_opt(n, "Media:AAID", td.acoustId);
+
+  ok &= write_attr_uint_opt(n, "Media:Rating", td.rating);
+
+  DEBUG_PRINT("[bfs] write attrs %s: %s\\n", path.Path(), ok ? "OK" : "FAILED");
+  return ok;
+}
+
 bool TagSync::WriteEmbeddedCover(const BPath &file, const uint8 *data,
                                  size_t size, const char *mimeOpt) {
   if (file.InitCheck() != B_OK)
@@ -745,7 +854,7 @@ bool TagSync::WriteEmbeddedCover(const BPath &file, const uint8 *data,
     }
 
     return f.save(TagLib::MPEG::File::AllTags, TagLib::File::StripNone,
-                  TagLib::ID3v2::v4, TagLib::File::DoNotDuplicate);
+                  TagLib::ID3v2::v3, TagLib::File::DoNotDuplicate);
   }
 
   if (lower.EndsWith(".m4a") || lower.EndsWith(".mp4") ||
@@ -868,4 +977,216 @@ bool TagSync::ExtractEmbeddedCover(const BPath &file, CoverBlob &outCover) {
   }
 
   return false;
+}
+
+bool TagSync::ReadBfsAttributes(const BPath &path, TagData &out) {
+  BNode node(path.Path());
+  if (node.InitCheck() != B_OK)
+    return false;
+
+  char buffer[512];
+  memset(buffer, 0, sizeof(buffer));
+  int32 intVal;
+
+  if (node.ReadAttr("Media:Title", B_STRING_TYPE, 0, buffer, sizeof(buffer)) >
+      0) {
+    out.title = buffer;
+    _trimBString(out.title);
+  }
+
+  if (node.ReadAttr("Audio:Artist", B_STRING_TYPE, 0, buffer, sizeof(buffer)) >
+      0) {
+    out.artist = buffer;
+    _trimBString(out.artist);
+  }
+
+  if (node.ReadAttr("Audio:Album", B_STRING_TYPE, 0, buffer, sizeof(buffer)) >
+      0) {
+    out.album = buffer;
+    _trimBString(out.album);
+  }
+
+  if (node.ReadAttr("Media:Genre", B_STRING_TYPE, 0, buffer, sizeof(buffer)) >
+      0) {
+    out.genre = buffer;
+    _trimBString(out.genre);
+  } else if (node.ReadAttr("Audio:Genre", B_STRING_TYPE, 0, buffer,
+                           sizeof(buffer)) > 0) {
+    out.genre = buffer;
+    _trimBString(out.genre);
+  }
+
+  if (node.ReadAttr("Media:Comment", B_STRING_TYPE, 0, buffer, sizeof(buffer)) >
+      0) {
+    out.comment = buffer;
+    _trimBString(out.comment);
+  }
+
+  if (node.ReadAttr("Media:Year", B_INT32_TYPE, 0, &intVal, sizeof(intVal)) > 0)
+    out.year = static_cast<uint32>(intVal);
+
+  if (node.ReadAttr("Audio:Track", B_INT32_TYPE, 0, &intVal, sizeof(intVal)) >
+      0)
+    out.track = static_cast<uint32>(intVal);
+
+  if (node.ReadAttr("Audio:AlbumArtist", B_STRING_TYPE, 0, buffer,
+                    sizeof(buffer)) > 0) {
+    out.albumArtist = buffer;
+    _trimBString(out.albumArtist);
+  }
+
+  if (node.ReadAttr("Audio:Composer", B_STRING_TYPE, 0, buffer,
+                    sizeof(buffer)) > 0) {
+    out.composer = buffer;
+    _trimBString(out.composer);
+  }
+
+  if (node.ReadAttr("Media:Rating", B_INT32_TYPE, 0, &intVal, sizeof(intVal)) >
+      0) {
+    if (intVal >= 1 && intVal <= 10)
+      out.rating = static_cast<uint32>(intVal);
+  }
+
+  if (node.ReadAttr("Media:MBAlbumID", B_STRING_TYPE, 0, buffer,
+                    sizeof(buffer)) > 0) {
+    out.mbAlbumID = buffer;
+    _trimBString(out.mbAlbumID);
+  }
+
+  if (node.ReadAttr("Media:MBArtistID", B_STRING_TYPE, 0, buffer,
+                    sizeof(buffer)) > 0) {
+    out.mbArtistID = buffer;
+    _trimBString(out.mbArtistID);
+  }
+
+  if (node.ReadAttr("Media:MBTrackID", B_STRING_TYPE, 0, buffer,
+                    sizeof(buffer)) > 0) {
+    out.mbTrackID = buffer;
+    _trimBString(out.mbTrackID);
+  }
+
+  if (node.ReadAttr("Media:AAID", B_STRING_TYPE, 0, buffer, sizeof(buffer)) >
+      0) {
+    out.acoustId = buffer;
+    _trimBString(out.acoustId);
+  } else if (node.ReadAttr("Media::AAID", B_STRING_TYPE, 0, buffer,
+                           sizeof(buffer)) > 0) {
+    out.acoustId = buffer;
+    _trimBString(out.acoustId);
+  }
+
+  return true;
+}
+
+TagData TagSync::MergeMetadata(const TagData &primary, const TagData &secondary,
+                               int32 mode) {
+  TagData result = primary;
+
+  auto mergeField = [mode](BString &target, const BString &secValue) {
+    if (mode == CONFLICT_OVERWRITE) {
+      return;
+    } else if (mode == CONFLICT_FILL_EMPTY) {
+      if (target.IsEmpty())
+        target = secValue;
+    }
+  };
+
+  auto mergeUint = [mode](uint32 &target, uint32 secValue) {
+    if (mode == CONFLICT_OVERWRITE) {
+      return;
+    } else if (mode == CONFLICT_FILL_EMPTY) {
+      if (target == 0)
+        target = secValue;
+    }
+  };
+
+  mergeField(result.title, secondary.title);
+  mergeField(result.artist, secondary.artist);
+  mergeField(result.album, secondary.album);
+  mergeField(result.genre, secondary.genre);
+  mergeField(result.comment, secondary.comment);
+  mergeField(result.albumArtist, secondary.albumArtist);
+  mergeField(result.composer, secondary.composer);
+  mergeField(result.mbAlbumID, secondary.mbAlbumID);
+  mergeField(result.mbArtistID, secondary.mbArtistID);
+  mergeField(result.mbTrackID, secondary.mbTrackID);
+  mergeField(result.acoustId, secondary.acoustId);
+  mergeField(result.acoustIdFp, secondary.acoustIdFp);
+
+  mergeUint(result.year, secondary.year);
+  mergeUint(result.track, secondary.track);
+  mergeUint(result.trackTotal, secondary.trackTotal);
+  mergeUint(result.disc, secondary.disc);
+  mergeUint(result.discTotal, secondary.discTotal);
+  mergeUint(result.rating, secondary.rating);
+
+  return result;
+}
+
+bool TagSync::ApplySync(const BPath &path, const TagData &source,
+                        bool towardsBfs) {
+  if (towardsBfs) {
+    return WriteBfsAttributes(path, source, nullptr);
+  } else {
+    return WriteTags(path, source);
+  }
+}
+
+bool TagSync::SmartMerge(const TagData &primary, const TagData &secondary,
+                         TagData &out, bool &hasConflict) {
+  bool changed = false;
+  hasConflict = false;
+  out = primary;
+
+  auto mergeField = [&](BString &target, const BString &prim,
+                        const BString &sec) {
+    if (prim == sec)
+      return;
+
+    if (prim.IsEmpty() && !sec.IsEmpty()) {
+      target = sec;
+      changed = true;
+    } else if (!prim.IsEmpty() && sec.IsEmpty()) {
+      target = prim;
+    } else if (!prim.IsEmpty() && !sec.IsEmpty() && prim != sec) {
+      hasConflict = true;
+    }
+  };
+
+  auto mergeUint = [&](uint32 &target, uint32 prim, uint32 sec) {
+    if (prim == sec)
+      return;
+
+    if (prim == 0 && sec != 0) {
+      target = sec;
+      changed = true;
+    } else if (prim != 0 && sec == 0) {
+      target = prim;
+    } else if (prim != 0 && sec != 0 && prim != sec) {
+      hasConflict = true;
+    }
+  };
+
+  mergeField(out.title, primary.title, secondary.title);
+  mergeField(out.artist, primary.artist, secondary.artist);
+  mergeField(out.album, primary.album, secondary.album);
+  mergeField(out.genre, primary.genre, secondary.genre);
+  mergeField(out.comment, primary.comment, secondary.comment);
+  mergeField(out.albumArtist, primary.albumArtist, secondary.albumArtist);
+  mergeField(out.composer, primary.composer, secondary.composer);
+  mergeField(out.mbAlbumID, primary.mbAlbumID, secondary.mbAlbumID);
+  mergeField(out.mbArtistID, primary.mbArtistID, secondary.mbArtistID);
+  mergeField(out.mbTrackID, primary.mbTrackID, secondary.mbTrackID);
+  mergeField(out.acoustId, primary.acoustId, secondary.acoustId);
+  mergeField(out.acoustIdFp, primary.acoustIdFp, secondary.acoustIdFp);
+
+  mergeUint(out.year, primary.year, secondary.year);
+  mergeUint(out.track, primary.track, secondary.track);
+  mergeUint(out.trackTotal, primary.trackTotal, secondary.trackTotal);
+  mergeUint(out.disc, primary.disc, secondary.disc);
+  mergeUint(out.discTotal, primary.discTotal, secondary.discTotal);
+
+  mergeUint(out.rating, primary.rating, secondary.rating);
+
+  return changed || hasConflict;
 }

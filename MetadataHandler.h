@@ -12,7 +12,7 @@
 /**
  * @class MetadataHandler
  * @brief Helper class for managing metadata operations (tags, covers).
- * 
+ *
  * Handles reading and writing audio metadata, including embedded cover art.
  * It encapsulates interactions with `TagSync` and processes batched updates
  * received via BMessages from the UI (e.g., PropertiesWindow).
@@ -54,7 +54,12 @@ public:
    */
   void SaveTags(const BMessage *msg);
 
-  // void UpdateFileInfo(const MediaItem *item); // Not implemented in .cpp?
+  /**
+   * @brief Synchronizes metadata between Tags and BFS attributes.
+   * @param files List of file paths to sync.
+   * @param towardsBfs true = Tags→BFS, false = BFS→Tags.
+   */
+  void SyncMetadata(const std::vector<BString> &files);
 
 private:
   BMessenger fTarget;
