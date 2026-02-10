@@ -62,9 +62,11 @@ struct TagData {
       DEBUG_PRINT("Diff: Genre '%s' vs '%s'\n", genre.String(),
                   other.genre.String());
     if (year != other.year)
-      DEBUG_PRINT("Diff: Year %u vs %u\n", year, other.year);
+      DEBUG_PRINT("Diff: Year %u vs %u\n", (unsigned int)year,
+                  (unsigned int)other.year);
     if (track != other.track)
-      DEBUG_PRINT("Diff: Track %u vs %u\n", track, other.track);
+      DEBUG_PRINT("Diff: Track %u vs %u\n", (unsigned int)track,
+                  (unsigned int)other.track);
     if (albumArtist != other.albumArtist)
       DEBUG_PRINT("Diff: AlbumArtist '%s' vs '%s'\n", albumArtist.String(),
                   other.albumArtist.String());
@@ -90,13 +92,17 @@ struct TagData {
       DEBUG_PRINT("Diff: Comment '%s' vs '%s'\n", comment.String(),
                   other.comment.String());
     if (trackTotal != other.trackTotal)
-      DEBUG_PRINT("Diff: TrackTotal %u vs %u\n", trackTotal, other.trackTotal);
+      DEBUG_PRINT("Diff: TrackTotal %u vs %u\n", (unsigned int)trackTotal,
+                  (unsigned int)other.trackTotal);
     if (disc != other.disc)
-      DEBUG_PRINT("Diff: Disc %u vs %u\n", disc, other.disc);
+      DEBUG_PRINT("Diff: Disc %u vs %u\n", (unsigned int)disc,
+                  (unsigned int)other.disc);
     if (discTotal != other.discTotal)
-      DEBUG_PRINT("Diff: DiscTotal %u vs %u\n", discTotal, other.discTotal);
+      DEBUG_PRINT("Diff: DiscTotal %u vs %u\n", (unsigned int)discTotal,
+                  (unsigned int)other.discTotal);
     if (rating != other.rating)
-      DEBUG_PRINT("Diff: Rating %u vs %u\n", rating, other.rating);
+      DEBUG_PRINT("Diff: Rating %u vs %u\n", (unsigned int)rating,
+                  (unsigned int)other.rating);
   }
 };
 
