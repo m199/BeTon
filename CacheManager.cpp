@@ -7,29 +7,7 @@
 #include <File.h>
 #include <FindDirectory.h>
 #include <Path.h>
-#include <algorithm>
-#include <fstream>
 #include <set>
-#include <string>
-#include <unistd.h>
-
-/**
- * @brief Helper to trim leading/trailing whitespace from a std::string.
- * @param s Input string.
- * @return Trimmed string.
- */
-static std::string Trim(std::string s) {
-  auto is_space = [](int c) {
-    return c == ' ' || c == '\t' || c == '\r' || c == '\n';
-  };
-  s.erase(s.begin(), std::find_if(s.begin(), s.end(),
-                                  [&](int c) { return !is_space(c); }));
-  s.erase(
-      std::find_if(s.rbegin(), s.rend(), [&](int c) { return !is_space(c); })
-          .base(),
-      s.end());
-  return s;
-}
 
 /**
  * @brief Constructor.
@@ -48,21 +26,41 @@ CacheManager::CacheManager(const BMessenger &target)
  * @brief Loads the list of watched directories from 'directories.txt'.
  * @param outDirs Vector to populate with directory paths.
  */
+#include "MusicSource.h"
+
+/**
+ * @brief Loads the list of watched directories from 'directories.settings' or
+ * legacy 'directories.txt'.
+ * @param outDirs Vector to populate with directory paths.
+ */
 void CacheManager::LoadDirectories(std::vector<BString> &outDirs) {
   BPath p;
-  find_directory(B_USER_SETTINGS_DIRECTORY, &p);
-  p.Append("BeTon/directories.txt");
-
-  std::ifstream in(p.Path());
-  if (!in.is_open())
+  if (find_directory(B_USER_SETTINGS_DIRECTORY, &p) != B_OK)
     return;
 
-  std::string line;
-  while (std::getline(in, line)) {
-    line = Trim(line);
-    if (line.empty() || line[0] == '#')
-      continue;
-    outDirs.emplace_back(line.c_str());
+  // Try loading from new settings format first
+  BPath settingsPath = p;
+  settingsPath.Append("BeTon/directories.settings");
+  BFile file(settingsPath.Path(), B_READ_ONLY);
+
+  if (file.InitCheck() == B_OK) {
+    BMessage archive;
+    if (archive.Unflatten(&file) == B_OK) {
+      BMessage srcMsg;
+      for (int32 i = 0; archive.FindMessage("source", i, &srcMsg) == B_OK;
+           i++) {
+        MusicSource src;
+        src.LoadFrom(&srcMsg);
+        if (!src.path.IsEmpty()) {
+          outDirs.push_back(src.path);
+        }
+      }
+      if (!outDirs.empty()) {
+        DEBUG_PRINT("[CacheManager] Loaded %zu directories from settings\n",
+                    outDirs.size());
+        return;
+      }
+    }
   }
 }
 
@@ -179,8 +177,7 @@ void CacheManager::SaveCache() {
     item.AddInt64("mtime", entry.mtime);
     item.AddInt64("inode", entry.inode);
     item.AddBool("missing", entry.missing);
-
-    item.AddBool("missing", entry.missing);
+    item.AddInt32("rating", entry.rating);
 
     item.AddString("mbAlbumId", entry.mbAlbumId);
     item.AddString("mbArtistId", entry.mbArtistId);
@@ -241,6 +238,10 @@ void CacheManager::LoadCache() {
     entry.mbAlbumId = item.GetString("mbAlbumId", "");
     entry.mbArtistId = item.GetString("mbArtistId", "");
     entry.mbTrackId = item.GetString("mbTrackId", "");
+    entry.rating = item.GetInt32("rating", 0);
+    if (entry.rating > 0)
+      DEBUG_PRINT("[CacheManager] Loaded rating %d for %s\n", (int)entry.rating,
+                  entry.path.String());
 
     fEntries[entry.path] = entry;
   }
@@ -312,6 +313,10 @@ void CacheManager::MessageReceived(BMessage *msg) {
       msg->FindInt64("size", i, &e.size);
       msg->FindInt64("mtime", i, &e.mtime);
       msg->FindInt64("inode", i, &e.inode);
+      msg->FindInt32("rating", i, &e.rating);
+      if (e.rating > 0)
+        DEBUG_PRINT("[CacheManager] Received rating %d for %s\n", (int)e.rating,
+                    e.path.String());
 
       if (msg->FindString("mbAlbumId", i, &tmp) == B_OK)
         e.mbAlbumId = tmp;

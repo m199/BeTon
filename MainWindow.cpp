@@ -12,6 +12,7 @@
 #include "PlaylistUtils.h"
 #include "PropertiesWindow.h"
 #include "SeekBarView.h"
+#include "SyncConflictDialog.h"
 #include "TagSync.h"
 
 #include <AboutWindow.h>
@@ -87,7 +88,7 @@ static BBitmap *LoadIconFromResource(int32 id, float size) {
   const void *data =
       be_app->AppResources()->LoadResource(B_VECTOR_ICON_TYPE, id, &len);
   if (!data || len == 0) {
-    fprintf(stderr, "[MainWindow] Icon-ID %ld nicht gefunden\n", (long)id);
+    fprintf(stderr, "[MainWindow] Icon-ID %ld not found\n", (long)id);
     return nullptr;
   }
 
@@ -96,8 +97,7 @@ static BBitmap *LoadIconFromResource(int32 id, float size) {
   if (BIconUtils::GetVectorIcon(static_cast<const uint8 *>(data), len, bmp) !=
       B_OK) {
     delete bmp;
-    fprintf(stderr, "[MainWindow] Icon-ID %ld: Dekodierung fehlgeschlagen\n",
-            (long)id);
+    fprintf(stderr, "[MainWindow] Icon-ID %ld: Decoding failed\n", (long)id);
     return nullptr;
   }
   return bmp;
@@ -156,7 +156,7 @@ MainWindow::MainWindow()
   fCacheManager->Run();
 
   fLibraryManager = new LibraryViewManager(BMessenger(this));
-  fMetadataHandler = new MetadataHandler(BMessenger(fCacheManager));
+  fMetadataHandler = new MetadataHandler(BMessenger(this));
 
   fInfoPanel = new InfoPanel();
   fStatusLabel = new BStringView("status", B_TRANSLATE("Loading..."));
@@ -169,8 +169,8 @@ MainWindow::MainWindow()
   font_height fh;
   be_plain_font->GetHeight(&fh);
   float fontHeight = fh.ascent + fh.descent + fh.leading;
-  float windowWidth = fontHeight * 70;       // ~1008px at default font
-  float windowHeight = windowWidth / 1.618f; // Golden ratio
+  float windowWidth = fontHeight * 70;
+  float windowHeight = windowWidth / 1.618f;
   ResizeTo(windowWidth, windowHeight);
   CenterOnScreen();
   fPlaylistManager->LoadAvailablePlaylists();
@@ -251,6 +251,10 @@ void MainWindow::_BuildUI() {
                                   new BMessage(MSG_MANAGE_DIRECTORIES)));
   fileMenu->AddItem(
       new BMenuItem(B_TRANSLATE("Rescan"), new BMessage(MSG_RESCAN_FULL)));
+
+  fileMenu->AddItem(new BMenuItem(B_TRANSLATE("Synchronize Metadata"),
+                                  new BMessage(MSG_SYNC_SMART)));
+
   fileMenu->AddSeparatorItem();
   fileMenu->AddItem(
       new BMenuItem(B_TRANSLATE("Quit"), new BMessage(B_QUIT_REQUESTED), 'q'));
@@ -648,7 +652,7 @@ void MainWindow::MessageReceived(BMessage *msg) {
 
   case MSG_SELECTION_COLOR_SYSTEM: {
     fUseSeekBarColorForSelection = false;
-    fUseCustomSeekBarColor = false; // Also reset SeekBar to default
+    fUseCustomSeekBarColor = false;
     if (fSelColorSystemItem)
       fSelColorSystemItem->SetMarked(true);
     if (fSelColorMatchItem)
@@ -1666,8 +1670,6 @@ void MainWindow::MessageReceived(BMessage *msg) {
       if (fShowCoverArt) {
         if (bmp) {
           fInfoPanel->SetCover(bmp);
-        } else {
-          fInfoPanel->ClearCover();
         }
       }
     }
@@ -1682,8 +1684,8 @@ void MainWindow::MessageReceived(BMessage *msg) {
       break;
 
     if (!fPlaylistManager->IsPlaylistWritable(playlist)) {
-      DEBUG_PRINT("[MainWindow] addp abgelehnt: Playlist '%s' ist nicht "
-                  "beschreibbar\\n",
+      DEBUG_PRINT("[MainWindow] addp rejected: Playlist '%s' is not "
+                  "writable\\n",
                   playlist.String());
       break;
     }
@@ -1775,8 +1777,8 @@ void MainWindow::MessageReceived(BMessage *msg) {
 
     if (files.empty()) {
       DEBUG_PRINT(
-          "[Properties] Keine Pfade in MSG_PROPERTIES (file/refs + Auswahl "
-          "leer)\\n");
+          "[Properties] No paths in MSG_PROPERTIES (file/refs + selection "
+          "empty)\\n");
       break;
     }
 
@@ -1819,7 +1821,7 @@ void MainWindow::MessageReceived(BMessage *msg) {
     if (msg->FindMessage("files", &filesMsg) == B_OK) {
       fPendingPlaylistFiles = filesMsg;
       DEBUG_PRINT("[MainWindow] %ld"
-                  " Dateien für neue Playlist gepuffert\\n",
+                  " Files for new playlist buffered\\n",
                   (long)filesMsg.CountNames(B_REF_TYPE));
     }
 
@@ -1868,9 +1870,8 @@ void MainWindow::MessageReceived(BMessage *msg) {
       while (fPendingPlaylistFiles.FindRef("refs", i++, &ref) == B_OK) {
         BPath path(&ref);
         AddItemToPlaylist(path.Path(), name);
-        DEBUG_PRINT(
-            "[MainWindow] Datei '%s' zu neuer Playlist '%s' hinzugefügt\\n",
-            path.Path(), name.String());
+        DEBUG_PRINT("[MainWindow] Files '%s' added to new playlist '%s'\\n",
+                    path.Path(), name.String());
       }
       fPendingPlaylistFiles.MakeEmpty();
     }
@@ -1939,7 +1940,7 @@ void MainWindow::MessageReceived(BMessage *msg) {
 
         BEntry entry(oldPath.Path());
         if (entry.Exists() && entry.Rename(newPath.Path()) == B_OK) {
-          DEBUG_PRINT("[MainWindow] Playlist '%s' → '%s' umbenannt\\n",
+          DEBUG_PRINT("[MainWindow] Playlist '%s' → '%s' renamed\\n",
                       oldName.String(), newName.String());
 
           fPlaylistManager->RenamePlaylist(oldName, newName);
@@ -2022,6 +2023,42 @@ void MainWindow::MessageReceived(BMessage *msg) {
     if (msg->FindString("text", &text) == B_OK) {
       UpdateStatus(text);
     }
+    break;
+  }
+
+  case MSG_SET_RATING: {
+    int32 rating = 0;
+    if (msg->FindInt32("rating", &rating) != B_OK)
+      break;
+
+    BMessage files;
+    if (msg->FindMessage("files", &files) != B_OK)
+      break;
+
+    entry_ref ref;
+    for (int32 i = 0; files.FindRef("refs", i, &ref) == B_OK; i++) {
+      BPath path(&ref);
+      if (path.InitCheck() != B_OK)
+        continue;
+
+      BFile file(path.Path(), B_READ_WRITE);
+      if (file.InitCheck() == B_OK) {
+        file.WriteAttr("Media:Rating", B_INT32_TYPE, 0, &rating,
+                       sizeof(rating));
+        DEBUG_PRINT("[MainWindow] Set rating %ld for %s\n", (long)rating,
+                    path.Path());
+      }
+
+      ContentColumnView *cv =
+          fLibraryManager ? fLibraryManager->ContentView() : nullptr;
+      if (cv) {
+        cv->UpdateRating(path.Path(), rating);
+      }
+    }
+
+    UpdateStatus(B_TRANSLATE("Rating updated."));
+    BMessage resetMsg(MSG_RESET_STATUS);
+    new BMessageRunner(BMessenger(this), &resetMsg, 2000000, 1);
     break;
   }
 
@@ -2175,7 +2212,7 @@ void MainWindow::MessageReceived(BMessage *msg) {
       break;
     msg->FindString("releaseId", &relId);
 
-    UpdateStatus("Hole Metadaten von MusicBrainz...");
+    UpdateStatus(B_TRANSLATE("Fetching metadata from MusicBrainz..."));
 
     bool albumMode = (msg->what == MSG_MB_APPLY_ALBUM);
 
@@ -2535,8 +2572,7 @@ void MainWindow::MessageReceived(BMessage *msg) {
       }
 
       BMessage doneMsg(MSG_STATUS_UPDATE);
-      doneMsg.AddString("text",
-                        B_TRANSLATE("Metadaten erfolgreich gespeichert."));
+      doneMsg.AddString("text", B_TRANSLATE("Metadata successfully saved."));
       BMessenger(this).SendMessage(&doneMsg);
 
       if (!files.empty()) {
@@ -2697,7 +2733,7 @@ void MainWindow::MessageReceived(BMessage *msg) {
         fPlaylistManager->LoadAvailablePlaylists();
         SaveSettings();
         BString statusMsg;
-        statusMsg.SetToFormat(B_TRANSLATE("Playlist-Ordner gesetzt: %s"),
+        statusMsg.SetToFormat(B_TRANSLATE("Playlist-Folder set: %s"),
                               fPlaylistPath.String());
         UpdateStatus(statusMsg);
       }
@@ -2840,14 +2876,14 @@ void MainWindow::MessageReceived(BMessage *msg) {
     fPlaylistManager->SavePlaylist(name, paths);
 
     BString statusMsg;
-    statusMsg.SetToFormat(B_TRANSLATE("Playlist '%s' erstellt"), name.String());
+    statusMsg.SetToFormat(B_TRANSLATE("Playlist '%s' created"), name.String());
     if (shuffle)
-      statusMsg << " " << B_TRANSLATE("(Gemischt)");
+      statusMsg << " " << B_TRANSLATE("(mixed)");
     if (limitMode > 0)
-      statusMsg << " " << B_TRANSLATE("(Limitiert)");
+      statusMsg << " " << B_TRANSLATE("(limited)");
 
     BString countStr;
-    countStr.SetToFormat(B_TRANSLATE(": %zu Titel."), matches.size());
+    countStr.SetToFormat(B_TRANSLATE(": %zu tracks."), matches.size());
     statusMsg << countStr;
 
     UpdateStatus(statusMsg);
@@ -2867,10 +2903,11 @@ void MainWindow::MessageReceived(BMessage *msg) {
         int32 m = (duration % 3600) / 60;
         int32 s = duration % 60;
         if (h > 0)
-          text.SetToFormat(B_TRANSLATE("%ld Titel. Gesamtdauer %02d:%02d:%02d"),
-                           (long)count, (int)h, (int)m, (int)s);
+          text.SetToFormat(
+              B_TRANSLATE("%ld  tracks. Total duration %02d:%02d:%02d"),
+              (long)count, (int)h, (int)m, (int)s);
         else
-          text.SetToFormat(B_TRANSLATE("%ld Titel. Gesamtdauer %02d:%02d"),
+          text.SetToFormat(B_TRANSLATE("%ld  tracks. Total duration %02d:%02d"),
                            (long)count, (int)m, (int)s);
       } else {
         text.SetToFormat(B_TRANSLATE("%ld tracks"), (long)count);
@@ -2883,6 +2920,155 @@ void MainWindow::MessageReceived(BMessage *msg) {
   case MSG_COUNT_UPDATED:
     _UpdateStatusLibrary();
     break;
+
+  case MSG_SYNC_SMART: {
+    std::vector<BString> files;
+
+    ContentColumnView *cv = fLibraryManager->ContentView();
+    BRow *row = nullptr;
+    while ((row = cv->CurrentSelection(row)) != nullptr) {
+      int32 idx = cv->IndexOf(row);
+      const MediaItem *mi = cv->ItemAt(idx);
+      if (mi && !mi->path.IsEmpty()) {
+        files.push_back(mi->path);
+      }
+    }
+
+    if (!files.empty() && fMetadataHandler) {
+      UpdateStatus(B_TRANSLATE("Syncing metadata..."), true);
+
+      BMessenger target(this);
+      MetadataHandler *handler = fMetadataHandler;
+      LaunchThread("sync_metadata", [files, target, handler]() {
+        handler->SyncMetadata(files);
+      });
+    } else if (files.empty()) {
+      UpdateStatus(B_TRANSLATE("No files selected"), false);
+    }
+    break;
+  }
+
+  case MSG_SYNC_PROGRESS: {
+    int32 current, total;
+    if (msg->FindInt32("current", &current) == B_OK &&
+        msg->FindInt32("total", &total) == B_OK) {
+      BString status;
+      status.SetToFormat(B_TRANSLATE("Syncing... %ld/%ld"), (long)current,
+                         (long)total);
+      UpdateStatus(status, true);
+    }
+    break;
+  }
+
+  case MSG_SYNC_DONE:
+    UpdateStatus(B_TRANSLATE("Sync complete"), false);
+    break;
+
+  case MSG_SYNC_CONFLICT: {
+    DEBUG_PRINT("[MainWindow] MSG_SYNC_CONFLICT received\n");
+
+    fPendingConflicts.push_back(*msg);
+
+    if (!fConflictDialogOpen) {
+      ShowNextConflictDialog();
+    } else if (fActiveConflictDialog) {
+      // Update total on possibly open dialog
+      int32 currentTotal =
+          fConflictsProcessed + static_cast<int32>(fPendingConflicts.size());
+      fActiveConflictDialog->UpdateTotal(currentTotal);
+    }
+    break;
+  }
+
+  case MSG_SYNC_CONFLICT_OK: {
+    BString path;
+    bool useTags;
+    if (msg->FindString("path", &path) == B_OK &&
+        msg->FindBool("useTags", &useTags) == B_OK) {
+
+      BPath filePath(path.String());
+      TagData tags, bfs;
+      TagSync::ReadTags(filePath, tags);
+      TagSync::ReadBfsAttributes(filePath, bfs);
+
+      bool directionTowardsBfs = useTags;
+      TagData &source = useTags ? tags : bfs;
+
+      TagSync::ApplySync(filePath, source, directionTowardsBfs);
+      DEBUG_PRINT("[MainWindow] Conflict resolved: wrote %s→%s for %s\n",
+                  useTags ? "Tags" : "BFS",
+                  directionTowardsBfs ? "BFS" : "Tags", path.String());
+
+      if (!directionTowardsBfs) {
+        BMessage update(MSG_MEDIA_ITEM_FOUND);
+        update.AddString("path", path);
+        update.AddString("title", source.title);
+        update.AddString("artist", source.artist);
+        update.AddString("album", source.album);
+        update.AddString("genre", source.genre);
+        update.AddInt32("year", source.year);
+        update.AddInt32("track", source.track);
+        PostMessage(&update);
+      }
+    }
+    fConflictDialogOpen = false;
+    ShowNextConflictDialog();
+    break;
+  }
+
+  case MSG_SYNC_CONFLICT_ALL: {
+    BString currentPath;
+    bool useTags;
+    if (msg->FindString("path", &currentPath) == B_OK &&
+        msg->FindBool("useTags", &useTags) == B_OK) {
+
+      // First apply to current file
+      BPath currentFilePath(currentPath.String());
+      TagData currentTags, currentBfs;
+      TagSync::ReadTags(currentFilePath, currentTags);
+      TagSync::ReadBfsAttributes(currentFilePath, currentBfs);
+
+      bool directionTowardsBfs = useTags;
+      TagData &currentSource = useTags ? currentTags : currentBfs;
+
+      TagSync::ApplySync(currentFilePath, currentSource, directionTowardsBfs);
+      DEBUG_PRINT("[MainWindow] Apply All (current): wrote %s→%s for %s\n",
+                  useTags ? "Tags" : "BFS",
+                  directionTowardsBfs ? "BFS" : "Tags", currentPath.String());
+
+      // Then apply to all remaining pending conflicts
+      for (auto &pending : fPendingConflicts) {
+        BString path;
+        if (pending.FindString("path", &path) == B_OK) {
+          BPath filePath(path.String());
+          TagData tags, bfs;
+          TagSync::ReadTags(filePath, tags);
+          TagSync::ReadBfsAttributes(filePath, bfs);
+          TagData &source = useTags ? tags : bfs;
+
+          TagSync::ApplySync(filePath, source, directionTowardsBfs);
+          DEBUG_PRINT("[MainWindow] Apply All: wrote %s→%s for %s\n",
+                      useTags ? "Tags" : "BFS",
+                      directionTowardsBfs ? "BFS" : "Tags", path.String());
+        }
+      }
+      fPendingConflicts.clear();
+      UpdateStatus(B_TRANSLATE("Sync complete"), false);
+    }
+    fConflictDialogOpen = false;
+    fConflictsProcessed = 0;
+    fActiveConflictDialog = nullptr;
+    break;
+  }
+
+  case MSG_SYNC_CONFLICT_SKIP: {
+    fPendingConflicts.clear();
+    fConflictDialogOpen = false;
+    fConflictsProcessed = 0;
+    fActiveConflictDialog = nullptr;
+    UpdateStatus(B_TRANSLATE("Sync cancelled"), false);
+    break;
+  }
 
   default:
     BWindow::MessageReceived(msg);
@@ -2947,12 +3133,14 @@ void MainWindow::RegisterWithCacheManager() {
 /**
  * @brief Updates the "Info" side panel with details of the selected item.
  *
- * Reads tags via TagLib on demand if the item is valid.
+ * Prioritizes data from the MediaItem (which includes BFS attributes if tags
+ * failed). Only reads technical audio properties from file if missing in
+ * MediaItem.
  */
 void MainWindow::UpdateFileInfo() {
   const MediaItem *mi = fLibraryManager->ContentView()->SelectedItem();
-  if (!mi) {
 
+  if (!mi) {
     if (fInfoPanel)
       fInfoPanel->SetFileInfo(
           B_TRANSLATE("Artist:\nAlbum:\nTitle:\nYear:\nGenre:"
@@ -2961,59 +3149,51 @@ void MainWindow::UpdateFileInfo() {
   }
 
   if (mi->path.IsEmpty()) {
-    BString info;
-    info << B_TRANSLATE("Artist: ") << mi->artist << "\n";
-    info << B_TRANSLATE("Album: ") << mi->album << "\n";
-    info << B_TRANSLATE("Title: ") << mi->title << "\n";
-    info << B_TRANSLATE("Year: ") << mi->year << "\n";
-    info << B_TRANSLATE("Genre: ") << mi->genre << "\n\n";
-    info << B_TRANSLATE("Bitrate: ") << mi->bitrate << " kbps\n";
-
     if (fInfoPanel)
-      fInfoPanel->SetFileInfo(info);
+      fInfoPanel->SetFileInfo("");
     return;
   }
 
-  TagLib::FileRef f(mi->path.String());
-  if (!f.isNull() && f.tag()) {
-    TagLib::Tag *tag = f.tag();
-    TagLib::AudioProperties *prop = f.audioProperties();
+  BString artist = mi->artist.IsEmpty() ? "-" : mi->artist;
+  BString album = mi->album.IsEmpty() ? "-" : mi->album;
+  BString title = mi->title.IsEmpty() ? "-" : mi->title;
+  BString genre = mi->genre.IsEmpty() ? "-" : mi->genre;
+  int32 year = mi->year;
+  int32 bitrate = mi->bitrate;
 
-    BString info;
-    info << B_TRANSLATE("Artist: ")
-         << (tag->artist().isEmpty() ? "-" : tag->artist().toCString(true))
-         << "\n";
-    info << B_TRANSLATE("Album: ")
-         << (tag->album().isEmpty() ? "-" : tag->album().toCString(true))
-         << "\n";
-    info << B_TRANSLATE("Title: ")
-         << (tag->title().isEmpty() ? "-" : tag->title().toCString(true))
-         << "\n";
-    info << B_TRANSLATE("Year: ") << (tag->year() ? tag->year() : 0) << "\n";
-    info << B_TRANSLATE("Genre: ")
-         << (tag->genre().isEmpty() ? "-" : tag->genre().toCString(true))
-         << "\n\n";
+  int32 sampleRate = mi->sampleRate;
+  int32 channels = mi->channels;
 
-    if (prop) {
-      info << B_TRANSLATE("Bitrate: ") << prop->bitrate() << " kbps\n";
-      info << B_TRANSLATE("Sample Rate: ") << prop->sampleRate() << " Hz\n";
-      info << B_TRANSLATE("Channels: ") << prop->channels();
+  // If technical details are missing in MediaItem, try to fetch them on demand
+  if (bitrate == 0 || sampleRate == 0) {
+    TagLib::FileRef f(mi->path.String());
+    if (!f.isNull() && f.audioProperties()) {
+      TagLib::AudioProperties *prop = f.audioProperties();
+      if (prop) {
+        bitrate = prop->bitrate();
+        sampleRate = prop->sampleRate();
+        channels = prop->channels();
+      }
     }
-
-    if (fInfoPanel)
-      fInfoPanel->SetFileInfo(info);
-  } else {
-    BString info;
-    info << B_TRANSLATE("Artist: ") << mi->artist << "\n";
-    info << B_TRANSLATE("Album: ") << mi->album << "\n";
-    info << B_TRANSLATE("Title: ") << mi->title << "\n";
-    info << B_TRANSLATE("Year: ") << mi->year << "\n";
-    info << B_TRANSLATE("Genre: ") << mi->genre << "\n\n";
-    info << B_TRANSLATE("Bitrate: ") << mi->bitrate << " kbps\n";
-
-    if (fInfoPanel)
-      fInfoPanel->SetFileInfo(info);
   }
+
+  BString info;
+  info << B_TRANSLATE("Artist: ") << artist << "\n";
+  info << B_TRANSLATE("Album: ") << album << "\n";
+  info << B_TRANSLATE("Title: ") << title << "\n";
+  info << B_TRANSLATE("Year: ")
+       << (year > 0 ? std::to_string(year).c_str() : "-") << "\n";
+  info << B_TRANSLATE("Genre: ") << genre << "\n\n";
+
+  if (bitrate > 0)
+    info << B_TRANSLATE("Bitrate: ") << bitrate << " kbps\n";
+  if (sampleRate > 0)
+    info << B_TRANSLATE("Sample Rate: ") << sampleRate << " Hz\n";
+  if (channels > 0)
+    info << B_TRANSLATE("Channels: ") << channels << "\n";
+
+  if (fInfoPanel)
+    fInfoPanel->SetFileInfo(info);
 }
 
 /**
@@ -3373,10 +3553,8 @@ void MainWindow::ApplyColors() {
     cv->SetColor(B_COLOR_SELECTION, selColor);
 
     float luminance = CalculateLuminance(selColor);
-    rgb_color selTextColor =
-        luminance > 0.5f
-            ? (rgb_color){0, 0, 0, 255}        // Dark text on light background
-            : (rgb_color){255, 255, 255, 255}; // Light text on dark background
+    rgb_color selTextColor = luminance > 0.5f ? (rgb_color){0, 0, 0, 255}
+                                              : (rgb_color){255, 255, 255, 255};
     cv->SetColor(B_COLOR_SELECTION_TEXT, selTextColor);
   }
 
@@ -3391,5 +3569,45 @@ void MainWindow::ApplyColors() {
 
   if (fPlaylistManager && fPlaylistManager->View()) {
     fPlaylistManager->View()->SetSelectionColor(selColor);
+  }
+}
+
+/**
+ * @brief Shows the next conflict dialog from the pending queue.
+ */
+void MainWindow::ShowNextConflictDialog() {
+  if (fPendingConflicts.empty()) {
+    fConflictsProcessed = 0;
+    UpdateStatus(B_TRANSLATE("Sync complete"), false);
+    return;
+  }
+
+  BMessage pending = fPendingConflicts.front();
+  fPendingConflicts.erase(fPendingConflicts.begin());
+
+  BString path;
+  if (pending.FindString("path", &path) == B_OK) {
+
+    BPath filePath(path.String());
+    TagData tags, bfs;
+    TagSync::ReadTags(filePath, tags);
+    TagSync::ReadBfsAttributes(filePath, bfs);
+
+    DEBUG_PRINT("[MainWindow] Conflict detected for %s:\n", path.String());
+    tags.LogDifferences(bfs);
+
+    fConflictsProcessed++;
+    int32 currentTotal =
+        fConflictsProcessed + static_cast<int32>(fPendingConflicts.size());
+
+    fConflictDialogOpen = true;
+    SyncConflictDialog *dialog =
+        new SyncConflictDialog(BMessenger(this), path, tags, bfs,
+                               fConflictsProcessed - 1, currentTotal);
+    fActiveConflictDialog = dialog;
+    dialog->Show();
+    if (path.Length() > 0)
+      DEBUG_PRINT("[MainWindow] ShowNextConflictDialog: %s (%d of %d)\n",
+                  path.String(), (int)fConflictsProcessed, (int)currentTotal);
   }
 }

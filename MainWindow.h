@@ -30,6 +30,7 @@
 class SeekBarView;
 class InfoPanel;
 class PropertiesWindow;
+class SyncConflictDialog;
 
 /**
  * @class MainWindow
@@ -218,6 +219,15 @@ private:
   BMessageRunner *fUpdateRunner{nullptr}; ///< Playback progress update timer
   BMessageRunner *fStatusRunner{nullptr}; ///< Status bar clear timer
   BMessageRunner *fSearchRunner{nullptr}; ///< Search debounce timer
+  ///@}
+
+  /** @name Sync Conflict Queue */
+  ///@{
+  std::vector<BMessage> fPendingConflicts;
+  bool fConflictDialogOpen{false};
+  int32 fConflictsProcessed{0};
+  SyncConflictDialog *fActiveConflictDialog{nullptr};
+  void ShowNextConflictDialog();
   ///@}
 };
 

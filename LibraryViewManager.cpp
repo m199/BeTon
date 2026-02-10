@@ -20,7 +20,9 @@
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "LibraryViewManager"
 
-static const BString kLabelAll = B_TRANSLATE("Show all");
+static const BString kLabelAllGenre = B_TRANSLATE("Show All Genre");
+static const BString kLabelAllArtist = B_TRANSLATE("Show All Artist");
+static const BString kLabelAllAlbum = B_TRANSLATE("Show All Album");
 static const BString kLabelNoGenre = B_TRANSLATE("No Genre");
 static const BString kLabelNoArtist = B_TRANSLATE("No Artist");
 static const BString kLabelNoAlbum = B_TRANSLATE("No Album");
@@ -215,7 +217,7 @@ void LibraryViewManager::UpdateFilteredViews(
   // -- Filter Lambdas --
 
   auto genreOK = [&](const MediaItem &i) {
-    if (selGenre.IsEmpty() || selGenre == kLabelAll)
+    if (selGenre.IsEmpty() || selGenre == kLabelAllGenre)
       return true;
     if (selGenre == kLabelNoGenre)
       return i.genre.IsEmpty();
@@ -223,7 +225,7 @@ void LibraryViewManager::UpdateFilteredViews(
   };
 
   auto artistOK = [&](const MediaItem &i) {
-    if (selArtist.IsEmpty() || selArtist == kLabelAll)
+    if (selArtist.IsEmpty() || selArtist == kLabelAllArtist)
       return true;
     if (selArtist == kLabelNoArtist)
       return i.artist.IsEmpty();
@@ -233,7 +235,7 @@ void LibraryViewManager::UpdateFilteredViews(
   BString selAlbumData = SelectedData(fAlbumView);
 
   auto albumOK = [&](const MediaItem &i) {
-    if (selAlbum.IsEmpty() || selAlbum == kLabelAll)
+    if (selAlbum.IsEmpty() || selAlbum == kLabelAllAlbum)
       return true;
     if (selAlbum == kLabelNoAlbum)
       return i.album.IsEmpty();
@@ -339,21 +341,21 @@ void LibraryViewManager::UpdateFilteredViews(
   };
 
   std::vector<BString> genreItems;
-  genreItems.push_back(kLabelAll);
+  genreItems.push_back(kLabelAllGenre);
   if (hasUntaggedGenreSrc)
     genreItems.push_back(kLabelNoGenre);
   for (const auto &g : allGenres)
     genreItems.push_back(g);
 
   std::vector<BString> artistItems;
-  artistItems.push_back(kLabelAll);
+  artistItems.push_back(kLabelAllArtist);
   if (hasUntaggedArtistForGenre)
     artistItems.push_back(kLabelNoArtist);
   for (const auto &a : artistsForGenre)
     artistItems.push_back(a);
 
   std::vector<DisplayItem> albumDisplayItems;
-  albumDisplayItems.push_back({kLabelAll, ""});
+  albumDisplayItems.push_back({kLabelAllAlbum, ""});
   if (hasUntaggedAlbumForGA)
     albumDisplayItems.push_back({kLabelNoAlbum, ""});
 
@@ -478,7 +480,7 @@ void LibraryViewManager::AddMediaItem(const MediaItem &item) {
   addUnique(fGenreView, item.genre, kLabelNoGenre.String());
 
   BString selGenre = SelectedText(fGenreView);
-  bool genreMatch = (selGenre.IsEmpty() || selGenre == kLabelAll ||
+  bool genreMatch = (selGenre.IsEmpty() || selGenre == kLabelAllGenre ||
                      (selGenre == kLabelNoGenre && item.genre.IsEmpty()) ||
                      selGenre == item.genre);
 
@@ -487,7 +489,7 @@ void LibraryViewManager::AddMediaItem(const MediaItem &item) {
 
     BString selArtist = SelectedText(fArtistView);
     bool artistMatch =
-        (selArtist.IsEmpty() || selArtist == kLabelAll ||
+        (selArtist.IsEmpty() || selArtist == kLabelAllArtist ||
          (selArtist == kLabelNoArtist && item.artist.IsEmpty()) ||
          selArtist == item.artist);
 

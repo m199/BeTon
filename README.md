@@ -13,7 +13,7 @@ A native music player for Haiku.
 
 *   Audio playback
 *   Playlist creation
-*   Reads and writes tags, with bfs attribute synchronization (currently only one way)
+*   Reads and writes tags, with bfs attribute synchronization
 *   MusicBrainz metadata lookup
 *   Color support, just drop a color on the seekbar
 
