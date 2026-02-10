@@ -48,15 +48,27 @@ struct MediaItem {
 
   /** @name Audio Properties */
   ///@{
-  int32 duration = 0; ///< Duration in seconds.
-  int32 bitrate = 0;  ///< Bitrate in kbps.
+  int32 duration = 0;   ///< Duration in seconds.
+  int32 bitrate = 0;    ///< Bitrate in kbps.
+  int32 sampleRate = 0; ///< Sample rate in Hz.
+  int32 channels = 0;   ///< Number of audio channels.
+  ///@}
+
+  /** @name AcoustID */
+  ///@{
+  BString acoustId; ///< AcoustID fingerprint identifier.
+  ///@}
+
+  /** @name Haiku BFS Attributes */
+  ///@{
+  int32 rating = 0; ///< Rating 1-10 (Media:Rating).
   ///@}
 
   /** @name File Stats */
   ///@{
-  int64 size = 0;   ///< File size in bytes.
+  int64 size = 0;  ///< File size in bytes.
   int64 mtime = 0; ///< Last modification time (for cache invalidation).
-  int64 inode = 0;  ///< File system inode number (stable identifier).
+  int64 inode = 0; ///< File system inode number (stable identifier).
   bool missing =
       false; ///< Flag indicating if file was not found during last scan.
   ///@}

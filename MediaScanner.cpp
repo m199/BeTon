@@ -1,9 +1,11 @@
 #include "MediaScanner.h"
 #include "Debug.h"
 #include "Messages.h"
+#include "TagSync.h"
 
 #include <Node.h>
 #include <Path.h>
+#include <SupportDefs.h>
 #include <stack>
 #include <sys/stat.h>
 #include <taglib/fileref.h>
@@ -43,7 +45,6 @@ MediaScanner::MediaScanner(const entry_ref &startDir, BMessenger cacheTarget,
  * Stops the worker thread and cleans up semaphores.
  */
 MediaScanner::~MediaScanner() {
-  // Signal stop and wait for thread
   fStopRequested = true;
   release_sem(fControlSem);
 
@@ -67,7 +68,7 @@ void MediaScanner::MessageReceived(BMessage *msg) {
       break;
 
     fScanRequested = true;
-    release_sem(fControlSem); // Wake up worker
+    release_sem(fControlSem);
     break;
   }
   default:
@@ -116,6 +117,9 @@ void MediaScanner::ProcessFile(BEntry &entry) {
   if (entry.GetPath(&path) != B_OK)
     return;
 
+  // Unconditional trace log
+  DEBUG_PRINT("[MediaScanner] Checking file: %s\n", path.Path());
+
   BString filePath(path.Path());
 
   if (!IsSupportedAudioFile(filePath))
@@ -125,13 +129,62 @@ void MediaScanner::ProcessFile(BEntry &entry) {
   if (stat(path.Path(), &st) != 0)
     return;
 
-  // 2. FAST SKIP: Check Cache
+  /**
+   * Fast Skip with Smart Rating Check
+   *
+   * Checks if the file's modification time and size are unchanged in the cache.
+   * If they match, it performs a lightweight check of the "Media:Rating"
+   * attribute to detect rating updates that might not have changed the file
+   * mtime.
+   *
+   * If the rating differs from the cached version, the cache entry is updated
+   * and the file is still skipped for full re-parsing.
+   */
   if (!fCache.empty()) {
     auto it = fCache.find(filePath);
     if (it != fCache.end()) {
       const MediaItem &old = it->second;
       if (old.mtime == st.st_mtime && old.size == st.st_size) {
-        // Unchanged -> Skip rigorous parsing
+        int32 currentRating = 0;
+        BNode node(path.Path());
+        ssize_t bytesRead = 0;
+        if (node.InitCheck() == B_OK) {
+          bytesRead = node.ReadAttr("Media:Rating", B_INT32_TYPE, 0,
+                                    &currentRating, sizeof(currentRating));
+        }
+
+        // Debug Log to see what happens
+        // DEBUG_PRINT("[MediaScanner] SmartSkip: %s | Cache: %d | BFS: %d
+        // (bytes: %ld)\n",
+        //             path.Leaf(), (int)old.rating, (int)currentRating,
+        //             (long)bytesRead);
+
+        if (bytesRead < (ssize_t)sizeof(currentRating)) {
+          currentRating = 0; // Attribute missing or invalid
+        }
+
+        // Normalize rating (0-10)
+        if (currentRating < 0 || currentRating > 10)
+          currentRating = 0;
+
+        if (currentRating == (int32)old.rating) {
+          return;
+        }
+
+        MediaItem updated = old;
+        updated.rating = (uint32)currentRating;
+
+        DEBUG_PRINT("[MediaScanner] FastUpdate rating %d (was %d) for %s\n",
+                    (int)updated.rating, (int)old.rating, filePath.String());
+
+        fBatchLock.Lock();
+        fBatchBuffer.push_back(updated);
+        bool needsFlush = (fBatchBuffer.size() >= 50);
+        fBatchLock.Unlock();
+
+        if (needsFlush)
+          FlushBatch();
+
         return;
       }
     }
@@ -140,7 +193,6 @@ void MediaScanner::ProcessFile(BEntry &entry) {
   fFoundFiles++;
   ReportProgress();
 
-  // Metadata Extraction
   BString title, artist, album, genre;
   int32 year = 0;
   int32 track = 0;
@@ -161,7 +213,6 @@ void MediaScanner::ProcessFile(BEntry &entry) {
       year = tag->year();
       track = tag->track();
 
-      // Extended Properties (Disc Number, MusicBrainz IDs)
       TagLib::PropertyMap props = f.file()->properties();
       if (props.contains("DISCNUMBER")) {
         TagLib::StringList l = props["DISCNUMBER"];
@@ -184,10 +235,6 @@ void MediaScanner::ProcessFile(BEntry &entry) {
       getProp("MUSICBRAINZ_ALBUMID", localMbAlbumId);
       getProp("MUSICBRAINZ_ARTISTID", localMbArtistId);
 
-      if (!localMbTrackId.IsEmpty())
-        mbTrackId = localMbTrackId;
-      if (!localMbAlbumId.IsEmpty())
-        mbAlbumId = localMbAlbumId;
       if (!localMbArtistId.IsEmpty())
         mbArtistId = localMbArtistId;
     }
@@ -198,15 +245,39 @@ void MediaScanner::ProcessFile(BEntry &entry) {
       bitrate = props->bitrate();
     }
   } catch (...) {
-    // TagLib failed -> ignore
   }
 
-  // Fallback: Use filename as title if tag is empty
+  TagData bfsData;
+  bool hasBfsData = TagSync::ReadBfsAttributes(path, bfsData);
+
+  if (title.IsEmpty() || artist.IsEmpty()) {
+    if (hasBfsData) {
+      if (title.IsEmpty())
+        title = bfsData.title;
+      if (artist.IsEmpty())
+        artist = bfsData.artist;
+      if (album.IsEmpty())
+        album = bfsData.album;
+      if (genre.IsEmpty())
+        genre = bfsData.genre;
+      if (year == 0)
+        year = bfsData.year;
+      if (track == 0)
+        track = bfsData.track;
+      if (disc == 0)
+        disc = bfsData.disc;
+
+      if (duration == 0)
+        duration = bfsData.lengthSec;
+      if (bitrate == 0)
+        bitrate = bfsData.bitrate;
+    }
+  }
+
   if (title.IsEmpty()) {
     title = path.Leaf();
   }
 
-  // Build MediaItem
   MediaItem item;
   BPath parentPath;
   if (path.GetParent(&parentPath) == B_OK) {
@@ -230,10 +301,17 @@ void MediaScanner::ProcessFile(BEntry &entry) {
   item.mbTrackId = mbTrackId;
   item.mbAlbumId = mbAlbumId;
   item.mbArtistId = mbArtistId;
+  if (hasBfsData) {
+    item.rating = bfsData.rating;
+    if (item.rating > 0)
+      DEBUG_PRINT("[MediaScanner] Read rating %d for %s\n", (int)item.rating,
+                  item.path.String());
+    else
+      DEBUG_PRINT("[MediaScanner] Rating is 0 for %s\n", item.path.String());
+  } else {
+    DEBUG_PRINT("[MediaScanner] No BFS data for %s\n", item.path.String());
+  }
 
-  item.mbArtistId = mbArtistId;
-
-  // Batch Logic (send to CacheManager)
   bool needsFlush = false;
 
   fBatchLock.Lock();
@@ -264,7 +342,6 @@ void MediaScanner::FlushBatch() {
   msg.AddString("base", fBasePath);
 
   for (const auto &item : fBatchBuffer) {
-    // Flatten key fields into message arrays
     msg.AddString("path", item.path);
     msg.AddString("item_base", item.base);
     msg.AddString("title", item.title);
@@ -279,6 +356,10 @@ void MediaScanner::FlushBatch() {
     msg.AddInt64("size", item.size);
     msg.AddInt64("mtime", item.mtime);
     msg.AddInt64("inode", item.inode);
+    msg.AddInt32("rating", item.rating);
+    if (item.rating > 0)
+      DEBUG_PRINT("[MediaScanner] FlushBatch: Sending rating %d for %s\n",
+                  (int)item.rating, item.path.String());
   }
 
   fBatchBuffer.clear();
@@ -300,7 +381,6 @@ void MediaScanner::ReportProgress() {
       std::chrono::duration_cast<std::chrono::milliseconds>(now - fLastUpdate)
           .count();
 
-  // Limit updates to ~10Hz to avoid flooding the message queue
   if (elapsed > 100) {
     fLastUpdate = now;
     if (fLiveTarget.IsValid()) {
@@ -339,7 +419,6 @@ status_t MediaScanner::WorkerEntry(void *data) {
  */
 void MediaScanner::WorkerMethod() {
   while (true) {
-    // Wait for start signal
     status_t err = acquire_sem(fControlSem);
     if (err == B_INTERRUPTED)
       continue;
@@ -360,7 +439,6 @@ void MediaScanner::WorkerMethod() {
       std::stack<BString> stack;
       stack.push(fBasePath);
 
-      // Iterative DFS Tree Traversal
       while (!stack.empty() && !fStopRequested) {
         BString currentPath = stack.top();
         stack.pop();
@@ -383,7 +461,6 @@ void MediaScanner::WorkerMethod() {
             continue;
 
           BString leaf(p.Leaf());
-          // Ignore dotfiles
           if (leaf.Length() > 0 && leaf.ByteAt(0) == '.')
             continue;
 
@@ -406,7 +483,6 @@ void MediaScanner::WorkerMethod() {
       }
 
       if (fLiveTarget.IsValid()) {
-        // Final detailed report
         BMessage doneMsg(MSG_SCAN_DONE);
         auto totalElapsed = std::chrono::duration_cast<std::chrono::seconds>(
                                 std::chrono::steady_clock::now() - fStartTime)
@@ -422,11 +498,6 @@ void MediaScanner::WorkerMethod() {
     }
 
     fIsScanning = false;
-
-    // Thread's job is done for this instance (One-shot scanner usually,
-    // but loop kept generic)
-    // Actually, CacheManager creates a NEW scanner for each directory,
-    // so we can likely quit.
     PostMessage(B_QUIT_REQUESTED);
     return;
   }

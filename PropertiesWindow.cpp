@@ -311,6 +311,7 @@ void PropertiesWindow::_BuildTab_Tags(BView *parent) {
   fHdrTitle = new BStringView(nullptr, "");
   fHdrSub1 = new BStringView(nullptr, "");
   fHdrSub2 = new BStringView(nullptr, "");
+  fHdrRating = new BStringView(nullptr, "☆☆☆☆☆");
 
   BFont big(*be_plain_font);
   big.SetSize(be_plain_font->Size() * 1.25f);
@@ -358,6 +359,7 @@ void PropertiesWindow::_BuildTab_Tags(BView *parent) {
       .Add(fHdrTitle)
       .Add(fHdrSub1)
       .Add(fHdrSub2)
+      .Add(fHdrRating)
       .AddGlue()
       .End()
       .AddGlue()
@@ -1102,6 +1104,38 @@ void PropertiesWindow::_LoadInitialData() {
     req->AddString("file", fFilePath.Path());
     _SendMessageToTarget(MSG_PROP_REQUEST_COVER, req);
   }
+
+  {
+    BFile file(fFilePath.Path(), B_READ_ONLY);
+    if (file.InitCheck() == B_OK) {
+      int32 rating = 0;
+      if (file.ReadAttr("Media:Rating", B_INT32_TYPE, 0, &rating,
+                        sizeof(rating)) == sizeof(rating)) {
+        fCurrentRating = rating;
+      } else {
+        fCurrentRating = 0;
+      }
+    }
+    if (fHdrRating) {
+      int rating = fCurrentRating;
+      if (rating < 0)
+        rating = 0;
+      if (rating > 10)
+        rating = 10;
+      int fullStars = rating / 2;
+      bool halfStar = (rating % 2) == 1;
+      int emptyStars = 5 - fullStars - (halfStar ? 1 : 0);
+      BString starStr;
+      for (int i = 0; i < fullStars; i++)
+        starStr << "★";
+      if (halfStar)
+        starStr << "⯪";
+      for (int i = 0; i < emptyStars; i++)
+        starStr << "☆";
+      fHdrRating->SetText(starStr);
+    }
+  }
+
   _UpdateHeaderFromFields();
 }
 

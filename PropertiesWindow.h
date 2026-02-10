@@ -129,6 +129,8 @@ private:
   BStringView *fHdrTitle = nullptr;
   BStringView *fHdrSub1 = nullptr;
   BStringView *fHdrSub2 = nullptr;
+  BStringView *fHdrRating = nullptr;
+  int32 fCurrentRating = 0;
 
   BTextControl *fEdTitle = nullptr;
   BTextControl *fEdArtist = nullptr;

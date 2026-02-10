@@ -1,9 +1,11 @@
 
 #include "ContentColumnView.h"
+#include "Entry.h"
 #include "MainWindow.h"
 #include "Messages.h"
+#include "MusicSource.h"
+#include "TagSync.h"
 #include <Catalog.h>
-#include <Entry.h>
 #include <Font.h>
 #include <Handler.h>
 #include <Looper.h>
@@ -20,11 +22,6 @@
 #define B_TRANSLATION_CONTEXT "ContentColumnView"
 
 /**
- * @class MediaRow
- * @brief Custom BRow subclass to store the associated MediaItem.
- */
-
-/**
  * @brief Calculate row height based on font for HiDPI scaling.
  * @return The calculated row height with 40% padding.
  */
@@ -35,6 +32,10 @@ static float CalculateRowHeight() {
   return ceilf(fontHeight * 1.4f);
 }
 
+/**
+ * @class MediaRow
+ * @brief Custom BRow subclass to store the associated MediaItem.
+ */
 class MediaRow : public BRow {
 public:
   explicit MediaRow(const MediaItem &mi)
@@ -104,7 +105,6 @@ public:
     }
 
     if (buttons & B_PRIMARY_MOUSE_BUTTON) {
-      // Let double-clicks pass through immediately for invocation
       int32 clicks = 1;
       msg->FindInt32("clicks", &clicks);
       if (clicks >= 2) {
@@ -240,7 +240,6 @@ static void AppendSelectedIndices(ContentColumnView *view, BMessage &into) {
  * @param view The content view to query selections from.
  * @param filesMsg The message to populate with "refs" entries.
  */
-
 static void BuildFilesMessage(ContentColumnView *view, BMessage &filesMsg) {
   filesMsg.MakeEmpty();
   filesMsg.what = 0;
@@ -263,14 +262,17 @@ static void BuildFilesMessage(ContentColumnView *view, BMessage &filesMsg) {
  */
 class StatusStringField : public BStringField {
 public:
-  StatusStringField(const char *string, bool missing, const BString &path = "")
-      : BStringField(string), fMissing(missing), fPath(path) {}
+  StatusStringField(const char *string, bool missing, const BString &path = "",
+                    SourceType source = SOURCE_TAGS)
+      : BStringField(string), fMissing(missing), fPath(path), fSource(source) {}
   bool IsMissing() const { return fMissing; }
   const BString &Path() const { return fPath; }
+  SourceType Source() const { return fSource; }
 
 private:
   bool fMissing;
   BString fPath;
+  SourceType fSource;
 };
 
 /**
@@ -279,12 +281,18 @@ private:
  */
 class StatusIntegerField : public BIntegerField {
 public:
-  StatusIntegerField(int32 number, bool missing)
-      : BIntegerField(number), fMissing(missing) {}
+  StatusIntegerField(int32 number, bool missing,
+                     SourceType source = SOURCE_TAGS, const BString &path = "")
+      : BIntegerField(number), fMissing(missing), fSource(source), fPath(path) {
+  }
   bool IsMissing() const { return fMissing; }
+  SourceType Source() const { return fSource; }
+  const BString &Path() const { return fPath; }
 
 private:
   bool fMissing;
+  SourceType fSource;
+  BString fPath;
 };
 
 /**
@@ -296,12 +304,14 @@ class StatusStringColumn : public BStringColumn {
 public:
   StatusStringColumn(const char *title, float width, float minWidth,
                      float maxWidth, uint32 truncate,
+                     const char *attrName = nullptr,
                      alignment align = B_ALIGN_LEFT,
                      ContentColumnView *owner = nullptr)
       : BStringColumn(title, width, minWidth, maxWidth, truncate, align),
-        fOwner(owner) {}
+        fAttrName(attrName), fOwner(owner), fTitle(title) {}
 
   void SetOwner(ContentColumnView *owner) { fOwner = owner; }
+  const char *Title() const { return fTitle.String(); }
 
   void DrawField(BField *field, BRect rect, BView *parent) override {
     StatusStringField *f = dynamic_cast<StatusStringField *>(field);
@@ -309,7 +319,17 @@ public:
     bool isGray = (f && f->IsMissing());
     bool isBold = false;
 
-    // Check if this field's path matches the now-playing path
+    if (f && f->Source() == SOURCE_BFS && !fAttrName.IsEmpty() &&
+        !f->Path().IsEmpty()) {
+      BNode node(f->Path().String());
+      if (node.InitCheck() == B_OK) {
+        BString val;
+        if (node.ReadAttrString(fAttrName.String(), &val) == B_OK) {
+          f->SetString(val.String());
+        }
+      }
+    }
+
     if (f && fOwner && !fOwner->NowPlayingPath().IsEmpty() &&
         !f->Path().IsEmpty() && f->Path() == fOwner->NowPlayingPath()) {
       isBold = true;
@@ -339,7 +359,9 @@ public:
   }
 
 private:
+  BString fAttrName;
   ContentColumnView *fOwner = nullptr;
+  BString fTitle;
 };
 
 /**
@@ -349,13 +371,29 @@ private:
 class StatusIntegerColumn : public BIntegerColumn {
 public:
   StatusIntegerColumn(const char *title, float width, float minWidth,
-                      float maxWidth, alignment align = B_ALIGN_LEFT)
-      : BIntegerColumn(title, width, minWidth, maxWidth, align) {}
+                      float maxWidth, const char *attrName = nullptr,
+                      alignment align = B_ALIGN_LEFT)
+      : BIntegerColumn(title, width, minWidth, maxWidth, align),
+        fAttrName(attrName), fTitle(title) {}
+
+  const char *Title() const { return fTitle.String(); }
 
   void DrawField(BField *field, BRect rect, BView *parent) override {
     StatusIntegerField *f = dynamic_cast<StatusIntegerField *>(field);
     rgb_color oldColor = parent->HighColor();
     bool isGray = (f && f->IsMissing());
+
+    if (f && f->Source() == SOURCE_BFS && !fAttrName.IsEmpty() &&
+        !f->Path().IsEmpty()) {
+      BNode node(f->Path().String());
+      if (node.InitCheck() == B_OK) {
+        int32 val = 0;
+        if (node.ReadAttr(fAttrName.String(), B_INT32_TYPE, 0, &val,
+                          sizeof(int32)) > 0) {
+          f->SetValue(val);
+        }
+      }
+    }
 
     if (isGray) {
       parent->SetHighColor(tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
@@ -367,8 +405,85 @@ public:
 
     parent->SetHighColor(oldColor);
   }
+
+private:
+  BString fAttrName;
+  BString fTitle;
 };
 
+/**
+ * @class RatingColumn
+ * @brief Column that renders rating stars.
+ */
+class RatingColumn : public BStringColumn {
+public:
+  RatingColumn(const char *title, float width, float minWidth, float maxWidth)
+      : BStringColumn(title, width, minWidth, maxWidth, B_TRUNCATE_END,
+                      B_ALIGN_LEFT),
+        fTitle(title) {}
+
+  const char *Title() const { return fTitle.String(); }
+
+  /**
+   * @brief Converts a numeric rating (0-10) to a star string representation.
+   * @param rating The rating value from 0 to 10.
+   * @return A BString containing the star representation.
+   */
+  static BString RatingToStars(int32 rating) {
+    if (rating < 0)
+      rating = 0;
+    if (rating > 10)
+      rating = 10;
+
+    int fullStars = rating / 2;
+    bool halfStar = (rating % 2) == 1;
+    int emptyStars = 5 - fullStars - (halfStar ? 1 : 0);
+
+    BString result;
+    for (int i = 0; i < fullStars; i++) {
+      result << "★";
+    }
+    if (halfStar) {
+      result << "⯪";
+    }
+    for (int i = 0; i < emptyStars; i++) {
+      result << "☆";
+    }
+    return result;
+  }
+
+  void DrawField(BField *field, BRect rect, BView *parent) override {
+    StatusStringField *sf = dynamic_cast<StatusStringField *>(field);
+    if (!sf)
+      return;
+
+    if (sf && !sf->Path().IsEmpty()) {
+      BNode node(sf->Path().String());
+      if (node.InitCheck() == B_OK) {
+        int32 rating = 0;
+        if (node.ReadAttr("Media:Rating", B_INT32_TYPE, 0, &rating,
+                          sizeof(int32)) > 0) {
+          sf->SetString(RatingToStars(rating).String());
+        }
+      }
+    }
+
+    BFont oldFont;
+    parent->GetFont(&oldFont);
+
+    BStringColumn::DrawField(field, rect, parent);
+
+    parent->SetFont(&oldFont);
+  }
+
+private:
+  BString fTitle;
+};
+
+/**
+ * @brief Constructor for the ContentColumnView.
+ * @param name The name of the view.
+ */
 ContentColumnView::ContentColumnView(const char *name)
     : BColumnListView(name, B_WILL_DRAW | B_FRAME_EVENTS | B_NAVIGABLE) {
   SetSelectionMode(B_MULTIPLE_SELECTION_LIST);
@@ -382,44 +497,44 @@ ContentColumnView::ContentColumnView(const char *name)
   SetColor(B_COLOR_HEADER_TEXT, ui_color(B_PANEL_TEXT_COLOR));
 
   AddColumn(new StatusStringColumn(B_TRANSLATE("Title"), 200, 50, 500,
-                                   B_TRUNCATE_END),
+                                   B_TRUNCATE_END, "Media:Title"),
             0);
   AddColumn(new StatusStringColumn(B_TRANSLATE("Artist"), 150, 50, 300,
-                                   B_TRUNCATE_END),
+                                   B_TRUNCATE_END, "Audio:Artist"),
             1);
   AddColumn(new StatusStringColumn(B_TRANSLATE("Album"), 150, 50, 300,
-                                   B_TRUNCATE_END),
+                                   B_TRUNCATE_END, "Audio:Album"),
             2);
   AddColumn(new StatusStringColumn(B_TRANSLATE("Album Artist"), 150, 50, 300,
-                                   B_TRUNCATE_END),
+                                   B_TRUNCATE_END, "Media:AlbumArtist"),
             3);
   AddColumn(new StatusStringColumn(B_TRANSLATE("Genre"), 100, 30, 200,
-                                   B_TRUNCATE_END),
+                                   B_TRUNCATE_END, "Media:Genre"),
             4);
   AddColumn(new StatusStringColumn(B_TRANSLATE("Year"), 60, 30, 80,
-                                   B_TRUNCATE_END, B_ALIGN_RIGHT),
+                                   B_TRUNCATE_END, "Media:Year", B_ALIGN_RIGHT),
             5);
   AddColumn(new StatusStringColumn(B_TRANSLATE("Duration"), 60, 30, 80,
-                                   B_TRUNCATE_END, B_ALIGN_RIGHT),
+                                   B_TRUNCATE_END, "Media:Length",
+                                   B_ALIGN_RIGHT),
             6);
-  AddColumn(
-      new StatusIntegerColumn(B_TRANSLATE("Track"), 50, 20, 80, B_ALIGN_RIGHT),
-      7);
-  AddColumn(
-      new StatusIntegerColumn(B_TRANSLATE("Disc"), 50, 20, 80, B_ALIGN_RIGHT),
-      8);
+  AddColumn(new StatusIntegerColumn(B_TRANSLATE("Track"), 50, 20, 80,
+                                    "Audio:Track", B_ALIGN_RIGHT),
+            7);
+  AddColumn(new StatusIntegerColumn(B_TRANSLATE("Disc"), 50, 20, 80,
+                                    "Media:Disc", B_ALIGN_RIGHT),
+            8);
   AddColumn(new StatusIntegerColumn(B_TRANSLATE("Bitrate"), 80, 50, 100,
-                                    B_ALIGN_RIGHT),
+                                    "Audio:Bitrate", B_ALIGN_RIGHT),
             9);
   AddColumn(new StatusStringColumn(B_TRANSLATE("Path"), 300, 100, 1000,
                                    B_TRUNCATE_END),
             10);
+  AddColumn(new RatingColumn(B_TRANSLATE("Rating"), 80, 60, 100), 11);
 
   SetInvocationMessage(new BMessage(MSG_PLAY));
   SetSelectionMessage(new BMessage(MSG_SELECTION_CHANGED_CONTENT));
 
-  // Set owner on all StatusStringColumn instances for now-playing bold
-  // rendering
   for (int32 i = 0; i < CountColumns(); ++i) {
     if (auto *col = dynamic_cast<StatusStringColumn *>(ColumnAt(i))) {
       col->SetOwner(this);
@@ -427,16 +542,20 @@ ContentColumnView::ContentColumnView(const char *name)
   }
 }
 
+/**
+ * @brief Sets the path of the currently playing media item.
+ * @param path The file path of the currently playing item.
+ *
+ * This triggers a redraw of the relevant rows to update the bold state.
+ */
 void ContentColumnView::SetNowPlayingPath(const BString &path) {
   if (fNowPlayingPath != path) {
     BString oldPath = fNowPlayingPath;
     fNowPlayingPath = path;
 
-    // Invalidate specific rows that need redrawing
     for (int32 i = 0; i < CountRows(); ++i) {
       MediaRow *mr = dynamic_cast<MediaRow *>(RowAt(i));
       if (mr) {
-        // Invalidate old playing row and new playing row
         if (mr->Item().path == oldPath || mr->Item().path == path) {
           InvalidateRow(mr);
         }
@@ -445,43 +564,66 @@ void ContentColumnView::SetNowPlayingPath(const BString &path) {
   }
 }
 
+/**
+ * @brief Destructor.
+ */
 ContentColumnView::~ContentColumnView() {}
 
+/**
+ * @brief Adds a single media item to the list view.
+ * @param mi The media item to add.
+ */
 void ContentColumnView::AddEntry(const MediaItem &mi) {
   MediaRow *row = new MediaRow(mi);
   bool m = mi.missing;
 
-  // Pass mi.path to each StatusStringField for now-playing detection
-  row->SetField(new StatusStringField(mi.title, m, mi.path), 0);
-  row->SetField(new StatusStringField(mi.artist, m, mi.path), 1);
-  row->SetField(new StatusStringField(mi.album, m, mi.path), 2);
-  row->SetField(new StatusStringField(mi.albumArtist, m, mi.path), 3);
-  row->SetField(new StatusStringField(mi.genre, m, mi.path), 4);
+  SourceType src = SOURCE_TAGS;
+  if (!mi.path.IsEmpty()) {
+    MusicSource ms = MusicSource::GetSourceForPath(mi.path);
+    src = ms.primary;
+  }
+
+  row->SetField(new StatusStringField(mi.title, m, mi.path, src), 0);
+  row->SetField(new StatusStringField(mi.artist, m, mi.path, src), 1);
+  row->SetField(new StatusStringField(mi.album, m, mi.path, src), 2);
+  row->SetField(new StatusStringField(mi.albumArtist, m, mi.path, src), 3);
+  row->SetField(new StatusStringField(mi.genre, m, mi.path, src), 4);
 
   BString yearStr;
   yearStr << mi.year;
-  row->SetField(new StatusStringField(yearStr, m, mi.path), 5);
+  row->SetField(new StatusStringField(yearStr, m, mi.path, src), 5);
 
   BString durStr;
   int32 min = mi.duration / 60;
   int32 sec = mi.duration % 60;
   durStr.SetToFormat("%ld:%02ld", (long)min, (long)sec);
-  row->SetField(new StatusStringField(durStr, m, mi.path), 6);
+  row->SetField(new StatusStringField(durStr, m, mi.path, src), 6);
 
-  row->SetField(new StatusIntegerField(mi.track, m), 7);
-  row->SetField(new StatusIntegerField(mi.disc, m), 8);
-  row->SetField(new StatusIntegerField(mi.bitrate, m), 9);
-  row->SetField(new StatusStringField(mi.path, m, mi.path), 10);
+  row->SetField(new StatusIntegerField(mi.track, m, src, mi.path), 7);
+  row->SetField(new StatusIntegerField(mi.disc, m, src, mi.path), 8);
+  row->SetField(new StatusIntegerField(mi.bitrate, m, src, mi.path), 9);
+  row->SetField(new StatusStringField(mi.path, m, mi.path, src), 10);
+  row->SetField(new StatusStringField(RatingColumn::RatingToStars(mi.rating), m,
+                                      mi.path, src),
+                11);
 
   AddRow(row);
 }
 
+/**
+ * @brief Adds multiple media items to the list view in batches.
+ * @param items The vector of media items to add.
+ */
 void ContentColumnView::AddEntries(const std::vector<MediaItem> &items) {
   fPendingItems = items;
   fPendingIndex = 0;
   _AddBatch(50);
 }
 
+/**
+ * @brief Adds a batch of pending items to the list view.
+ * @param count The number of items to add in this batch.
+ */
 void ContentColumnView::_AddBatch(size_t count) {
   if (fPendingIndex >= fPendingItems.size())
     return;
@@ -516,13 +658,25 @@ void ContentColumnView::_AddBatch(size_t count) {
   }
 }
 
+/**
+ * @brief Clears all entries from the list view.
+ */
 void ContentColumnView::ClearEntries() {
   Clear();
   RefreshScrollbars();
 }
 
+/**
+ * @brief Refreshes the scrollbars by invalidating the layout.
+ */
 void ContentColumnView::RefreshScrollbars() { InvalidateLayout(); }
 
+/**
+ * @brief Initiates a drag operation for selected items.
+ * @param point The point where the drag started.
+ * @param wasSelected Whether the item at the point was selected.
+ * @return True if drag was initiated, false otherwise.
+ */
 bool ContentColumnView::InitiateDrag(BPoint point, bool wasSelected) {
   BMessage dragMsg(B_SIMPLE_DATA);
 
@@ -558,6 +712,13 @@ bool ContentColumnView::InitiateDrag(BPoint point, bool wasSelected) {
   return false;
 }
 
+/**
+ * @brief Handles key down events.
+ * @param bytes The raw key data.
+ * @param numBytes The number of bytes in the key data.
+ *
+ * Handles deletion of items and moving items up/down with Option+Arrow keys.
+ */
 void ContentColumnView::KeyDown(const char *bytes, int32 numBytes) {
   if (numBytes == 1 && bytes[0] == B_DELETE) {
     BMessage msg(MSG_DELETE_ITEM);
@@ -595,6 +756,12 @@ void ContentColumnView::KeyDown(const char *bytes, int32 numBytes) {
   BColumnListView::KeyDown(bytes, numBytes);
 }
 
+/**
+ * @brief Handles mouse movement events.
+ * @param where The point where the mouse is.
+ * @param transit The transit code (entered, exited, inside).
+ * @param dragMsg The drag message, if any.
+ */
 void ContentColumnView::MouseMoved(BPoint where, uint32 transit,
                                    const BMessage *dragMsg) {
   if (fDragSourceIndex >= 0 && dragMsg && dragMsg->what == B_SIMPLE_DATA) {
@@ -603,6 +770,11 @@ void ContentColumnView::MouseMoved(BPoint where, uint32 transit,
   BColumnListView::MouseMoved(where, transit, dragMsg);
 }
 
+/**
+ * @brief Called when the view is attached to a window.
+ *
+ * Adds the RightClickFilter and DropFilter to the scroll view.
+ */
 void ContentColumnView::AttachedToWindow() {
   BColumnListView::AttachedToWindow();
   if (BView *outline = ScrollView()) {
@@ -612,10 +784,20 @@ void ContentColumnView::AttachedToWindow() {
   }
 }
 
+/**
+ * @brief Called when the view is detached from a window.
+ */
 void ContentColumnView::DetachedFromWindow() {
   BColumnListView::DetachedFromWindow();
 }
 
+/**
+ * @brief Handles received messages.
+ * @param msg The message to handle.
+ *
+ * Handles context menu, chunk addition, color updates, and drag & drop
+ * reordering.
+ */
 void ContentColumnView::MessageReceived(BMessage *msg) {
   switch (msg->what) {
   case kMsgShowCtx: {
@@ -687,6 +869,24 @@ void ContentColumnView::MessageReceived(BMessage *msg) {
 
     menu.AddItem(addSub);
 
+    // menu.AddSeparatorItem(); //maybe looks better without it?
+
+    BMenu *ratingMenu = new BMenu(B_TRANSLATE("Rating"));
+    BMessage filesMsg;
+    BuildFilesMessage(this, filesMsg);
+
+    for (int32 i = 0; i <= 10; ++i) {
+      BString label = RatingColumn::RatingToStars(i);
+
+      BMessage *msg = new BMessage(MSG_SET_RATING);
+      msg->AddInt32("rating", i);
+      if (filesMsg.HasRef("refs")) {
+        msg->AddMessage("files", &filesMsg);
+      }
+      ratingMenu->AddItem(new BMenuItem(label.String(), msg));
+    }
+    menu.AddItem(ratingMenu);
+
     menu.AddSeparatorItem();
     {
       BMessage *m = new BMessage(MSG_REVEAL_IN_TRACKER);
@@ -751,33 +951,33 @@ void ContentColumnView::MessageReceived(BMessage *msg) {
 
   case B_SIMPLE_DATA: {
     printf("[ContentColumnView] B_SIMPLE_DATA received, fDragSourceIndex=%ld"
-           "\\n",
+           "\n",
            (long)fDragSourceIndex);
-    printf("[ContentColumnView] fLastDropPoint=(%f,%f)\\n", fLastDropPoint.x,
+    printf("[ContentColumnView] fLastDropPoint=(%f,%f)\n", fLastDropPoint.x,
            fLastDropPoint.y);
     fflush(stdout);
 
     if (fDragSourceIndex < 0) {
-      printf("[ContentColumnView] Not internal drag, forwarding\\n");
+      printf("[ContentColumnView] Not internal drag, forwarding\n");
       fflush(stdout);
       BColumnListView::MessageReceived(msg);
       break;
     }
 
     int32 sourceIndex = fDragSourceIndex;
-    fDragSourceIndex = -1; // Reset for next drag
+    fDragSourceIndex = -1;
 
     BRow *targetRow = RowAt(fLastDropPoint);
     int32 targetIndex = targetRow ? IndexOf(targetRow) : CountRows() - 1;
     printf("[ContentColumnView] sourceIndex=%ld, targetIndex=%ld"
-           "\\n",
+           "\n",
            (long)sourceIndex, (long)targetIndex);
     fflush(stdout);
 
     if (sourceIndex == targetIndex || sourceIndex < 0 || targetIndex < 0)
       break;
 
-    printf("[ContentColumnView] Sending MSG_REORDER_PLAYLIST\\n");
+    printf("[ContentColumnView] Sending MSG_REORDER_PLAYLIST\n");
     fflush(stdout);
     BMessage reorderMsg(MSG_REORDER_PLAYLIST);
     reorderMsg.AddInt32("from_index", sourceIndex);
@@ -792,6 +992,11 @@ void ContentColumnView::MessageReceived(BMessage *msg) {
   }
 }
 
+/**
+ * @brief Returns the internal MediaItem pointer for the currently selected row.
+ * @return Pointer to the MediaItem of the selected row, or nullptr if none
+ * selected.
+ */
 const MediaItem *ContentColumnView::SelectedItem() const {
   MediaRow *row = dynamic_cast<MediaRow *>(CurrentSelection());
   if (row)
@@ -799,6 +1004,11 @@ const MediaItem *ContentColumnView::SelectedItem() const {
   return nullptr;
 }
 
+/**
+ * @brief Returns the MediaItem pointer for a specific row index.
+ * @param index The index of the row.
+ * @return Pointer to the MediaItem, or nullptr if not found.
+ */
 const MediaItem *ContentColumnView::ItemAt(int32 index) const {
   const BRow *r = RowAt(index);
   if (!r)
@@ -810,10 +1020,133 @@ const MediaItem *ContentColumnView::ItemAt(int32 index) const {
   return nullptr;
 }
 
+/**
+ * @brief Checks if the media file for a given row is missing.
+ * @param row The row to check.
+ * @return True if the file is missing, false otherwise.
+ */
 bool ContentColumnView::IsRowMissing(BRow *row) const {
   MediaRow *mrow = dynamic_cast<MediaRow *>(row);
   if (mrow) {
     return mrow->Item().missing;
   }
   return false;
+}
+
+/**
+ * @brief Updates the rating display for a specific media item path.
+ * @param path The file path of the media item.
+ * @param rating The new rating value.
+ */
+void ContentColumnView::UpdateRating(const BString &path, int32 rating) {
+  for (int32 i = 0; i < CountRows(); ++i) {
+    MediaRow *row = dynamic_cast<MediaRow *>(RowAt(i));
+    if (row && row->Item().path == path) {
+      BStringField *ratingField =
+          dynamic_cast<BStringField *>(row->GetField(11));
+      if (ratingField) {
+        ratingField->SetString(RatingColumn::RatingToStars(rating));
+        InvalidateRow(row);
+      }
+      return;
+    }
+  }
+}
+
+/**
+ * @brief Reloads a single entry in the list view.
+ * @param path The file path of the item to reload.
+ */
+void ContentColumnView::ReloadEntry(const BString &path) {
+  for (int32 i = 0; i < CountRows(); ++i) {
+    MediaRow *row = dynamic_cast<MediaRow *>(RowAt(i));
+    if (row && row->Item().path == path) {
+      InvalidateRow(row);
+      return;
+    }
+  }
+}
+
+/**
+ * @brief Saves the current column layout to a message.
+ *
+ * Persists the column titles, widths, and visibility states.
+ * Columns are identified by their titles to ensure robustness against
+ * reordering or insertion of new columns.
+ *
+ * @param msg The message to store the state in.
+ */
+void ContentColumnView::SaveState(BMessage *msg) {
+  if (!msg)
+    return;
+
+  msg->RemoveName("col_index");
+  msg->RemoveName("col_width");
+  msg->RemoveName("col_visible");
+
+  for (int32 i = 0; i < CountColumns(); ++i) {
+    BColumn *col = ColumnAt(i);
+    BString name;
+    if (auto *sc = dynamic_cast<StatusStringColumn *>(col)) {
+      name = sc->Title();
+    } else if (auto *ic = dynamic_cast<StatusIntegerColumn *>(col)) {
+      name = ic->Title();
+    } else if (auto *rc = dynamic_cast<RatingColumn *>(col)) {
+      name = rc->Title();
+    }
+
+    if (!name.IsEmpty()) {
+      msg->AddString("col_name", name);
+      msg->AddFloat("col_width", col->Width());
+      msg->AddBool("col_visible", col->IsVisible());
+    }
+  }
+}
+
+/**
+ * @brief Loads the column layout from a message.
+ *
+ * Restores the column order, widths, and visibility states.
+ * It maps the saved column names to the current columns and applies
+ * the saved properties. Columns are reordered to match the saved sequence.
+ *
+ * @param msg The message containing the saved state.
+ */
+void ContentColumnView::LoadState(BMessage *msg) {
+  if (!msg)
+    return;
+
+  BString colName;
+  float colWidth;
+  bool colVisible;
+  int32 i = 0;
+
+  std::map<BString, BColumn *> cols;
+  for (int32 c = 0; c < CountColumns(); ++c) {
+    BColumn *col = ColumnAt(c);
+    BString name;
+    if (auto *sc = dynamic_cast<StatusStringColumn *>(col)) {
+      name = sc->Title();
+    } else if (auto *ic = dynamic_cast<StatusIntegerColumn *>(col)) {
+      name = ic->Title();
+    } else if (auto *rc = dynamic_cast<RatingColumn *>(col)) {
+      name = rc->Title();
+    }
+    if (!name.IsEmpty()) {
+      cols[name] = col;
+    }
+  }
+
+  while (msg->FindString("col_name", i, &colName) == B_OK &&
+         msg->FindFloat("col_width", i, &colWidth) == B_OK &&
+         msg->FindBool("col_visible", i, &colVisible) == B_OK) {
+
+    if (cols.count(colName)) {
+      BColumn *col = cols[colName];
+      col->SetWidth(colWidth);
+      col->SetVisible(colVisible);
+      MoveColumn(col, i);
+    }
+    i++;
+  }
 }

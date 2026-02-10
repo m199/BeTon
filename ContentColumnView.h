@@ -53,6 +53,21 @@ public:
   void SetNowPlayingPath(const BString &path);
   const BString &NowPlayingPath() const { return fNowPlayingPath; }
 
+  /**
+   * @brief Updates the rating display for a specific file path.
+   * @param path The file path to update
+   * @param rating The new rating value (0-10)
+   */
+  void UpdateRating(const BString &path, int32 rating);
+
+  /**
+   * @brief Reloads metadata for a single file from disk.
+   */
+  void ReloadEntry(const BString &path);
+
+  void SaveState(BMessage *msg);
+  void LoadState(BMessage *msg);
+
 protected:
   bool InitiateDrag(BPoint point, bool wasSelected) override;
   void KeyDown(const char *bytes, int32 numBytes) override;
