@@ -266,7 +266,7 @@ void PlaylistListView::MouseMoved(BPoint point, uint32 transit,
     if (dragMsg->FindInt32("playlist_index", &sourceIndex) == B_OK) {
       float rowH = LineHeight();
       int32 targetRow = (int32)((point.y + rowH / 2.0f) / rowH);
-      targetRow = std::max(0, std::min(targetRow, CountItems()));
+      targetRow = std::max((int32)0, std::min(targetRow, CountItems()));
 
       fDropLineIndex = targetRow;
       return;
@@ -608,3 +608,4 @@ void PlaylistListView::SetPlaylistOrder(const std::vector<BString> &order) {
       "[PlaylistListView] SetPlaylistOrder complete, now have %zu items\n",
       fItems.size());
 }
+
