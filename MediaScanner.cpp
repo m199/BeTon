@@ -88,7 +88,7 @@ static bool IsSupportedAudioFile(const BString &path) {
   BString lower(path);
   lower.ToLower();
 
-  static const char *exts[] = {".mp3", ".wav", ".flac", ".ogg",
+  static const char *exts[] = {".mp3", ".wav", ".flac", ".ogg", ".opus",
                                ".m4a", ".aac", ".wma"};
 
   for (auto ext : exts) {
