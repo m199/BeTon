@@ -26,6 +26,7 @@ public:
 };
 
 int main(int argc, char **argv) {
+  srand(static_cast<unsigned int>(time(nullptr)));
   for (int i = 1; i < argc; ++i) {
     if (strcmp(argv[i], "--debug") == 0) {
       gIsDebug = true;
