@@ -2,7 +2,9 @@
 #include "MainWindow.h"
 #include <Application.h>
 #include <Catalog.h>
+#include <cstdlib>
 #include <cstring>
+#include <ctime>
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "Application"
