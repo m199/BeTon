@@ -223,9 +223,11 @@ void PlaylistListView::MouseDown(BPoint where) {
     return;
   }
 
-  if (index >= 0) {
+  if (index > 0) {
     fDragStartPoint = where;
     fDragIndex = index;
+  } else {
+    fDragIndex = -1;
   }
 
   SimpleColumnView::MouseDown(where);
@@ -266,7 +268,7 @@ void PlaylistListView::MouseMoved(BPoint point, uint32 transit,
     if (dragMsg->FindInt32("playlist_index", &sourceIndex) == B_OK) {
       float rowH = LineHeight();
       int32 targetRow = (int32)((point.y + rowH / 2.0f) / rowH);
-      targetRow = std::max((int32)0, std::min(targetRow, CountItems()));
+      targetRow = std::max((int32)1, std::min(targetRow, CountItems()));
 
       fDropLineIndex = targetRow;
       return;
@@ -530,7 +532,7 @@ void PlaylistListView::Draw(BRect updateRect) {
 }
 
 void PlaylistListView::_ReorderItem(int32 from, int32 to) {
-  if (from < 0 || from >= CountItems() || to < 0 || to > CountItems() ||
+  if (from <= 0 || from >= CountItems() || to <= 0 || to > CountItems() ||
       from == to)
     return;
 
@@ -578,7 +580,14 @@ void PlaylistListView::SetPlaylistOrder(const std::vector<BString> &order) {
   std::vector<SimpleItem> newItems;
   std::vector<PlaylistRow> newRows;
 
+  int32 libIndex = FindIndexByName("Library");
+  if (libIndex >= 0 && libIndex < (int32)fItems.size()) {
+    newItems.push_back(fItems[libIndex]);
+    newRows.push_back(fRows[libIndex]);
+  }
+
   for (const auto &name : order) {
+    if (name == "Library") continue;
     int32 currentIndex = FindIndexByName(name);
     if (currentIndex >= 0 && currentIndex < (int32)fItems.size()) {
       newItems.push_back(fItems[currentIndex]);
@@ -590,6 +599,7 @@ void PlaylistListView::SetPlaylistOrder(const std::vector<BString> &order) {
 
   for (size_t i = 0; i < fItems.size(); ++i) {
     const BString &name = fItems[i].text;
+    if (name == "Library") continue;
     if (targetPositions.find(name) == targetPositions.end()) {
       newItems.push_back(fItems[i]);
       newRows.push_back(fRows[i]);
