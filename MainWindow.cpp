@@ -1513,6 +1513,14 @@ void MainWindow::MessageReceived(BMessage *msg) {
       delete fUpdateRunner;
       fUpdateRunner = nullptr;
     }
+    if (fIconPlay)
+      fBtnPlayPause->SetIcon(fIconPlay, 0);
+    fTitleView->SetText("");
+    fSeekBar->SetPosition(0);
+    fSeekBar->SetDuration(0);
+    fSongDuration = 0;
+    if (fLibraryManager && fLibraryManager->ContentView())
+      fLibraryManager->ContentView()->SetNowPlayingPath("");
     break;
 
   case MSG_SEEK_REQUEST:
@@ -1746,7 +1754,6 @@ void MainWindow::MessageReceived(BMessage *msg) {
       }
     }
 
-    fIsLibraryMode = (kind == PlaylistItemKind::Library);
     fIsLibraryMode = (kind == PlaylistItemKind::Library);
 
     if (fIsLibraryMode) {

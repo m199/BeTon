@@ -91,19 +91,19 @@ private:
   BMediaTrack *fTrack = nullptr;
   ///@}
 
-  /** @name Playback State */
+  /** @name Playback Position, Volume and Index */
   ///@{
   bigtime_t fCurrentPos = 0;
   bigtime_t fDuration = 0;
-  bool fPlaying = false;
-  bool fPaused = false;
   float fVolume = 1.0f;
   size_t fCurrentIdx = 0;
   ///@}
 
-  /** @name Queue & Thread Safety */
+  /** @name Queue, Thread Safety and Playback*/
   ///@{
   std::vector<std::string> fQueue;
+  std::atomic<bool> fPlaying{false};
+  std::atomic<bool> fPaused{false};
   std::atomic<bool> fAtEnd{false};
   std::atomic<bool> fShuttingDown{false};
   std::atomic<bool> fInCallback{false};

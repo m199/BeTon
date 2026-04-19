@@ -165,9 +165,9 @@ void MediaPlaybackController::Play(size_t trackIndex) {
     fTarget.SendMessage(&m);
   }
 
-  fAtEnd = false;
-  fPlaying = true;
-  fPaused = false;
+  fAtEnd.store(false, std::memory_order_relaxed);
+  fPlaying.store(true, std::memory_order_relaxed);
+  fPaused.store(false, std::memory_order_relaxed);
   fCurrentPos = 0;
 
   _StartTimeUpdates();
@@ -179,10 +179,10 @@ void MediaPlaybackController::Play(size_t trackIndex) {
  * @brief Pauses playback.
  */
 void MediaPlaybackController::Pause() {
-  if (fPlayer && fPlaying) {
+  if (fPlayer && fPlaying.load(std::memory_order_relaxed)) {
     fPlayer->Stop();
-    fPaused = true;
-    fPlaying = false;
+    fPaused.store(true, std::memory_order_relaxed);
+    fPlaying.store(false, std::memory_order_relaxed);
   }
 }
 
@@ -190,11 +190,11 @@ void MediaPlaybackController::Pause() {
  * @brief Resumes paused playback.
  */
 void MediaPlaybackController::Resume() {
-  if (fPlayer && fPaused) {
+  if (fPlayer && fPaused.load(std::memory_order_relaxed)) {
     fPlayer->Start();
     fPlayer->SetHasData(true);
-    fPaused = false;
-    fPlaying = true;
+    fPaused.store(false, std::memory_order_relaxed);
+    fPlaying.store(true, std::memory_order_relaxed);
   }
 }
 
@@ -217,8 +217,8 @@ void MediaPlaybackController::Stop() {
 
   _CleanupMedia();
 
-  fPlaying = false;
-  fPaused = false;
+  fPlaying.store(false, std::memory_order_relaxed);
+  fPaused.store(false, std::memory_order_relaxed);
   fCurrentPos = 0;
   fDuration = 0;
   fCurrentIdx = 0;
@@ -270,7 +270,10 @@ void MediaPlaybackController::SeekTo(bigtime_t pos) {
   }
 }
 
-bool MediaPlaybackController::IsPlaying() const { return fPlaying && !fPaused; }
+bool MediaPlaybackController::IsPlaying() const {
+  return fPlaying.load(std::memory_order_relaxed) &&
+         !fPaused.load(std::memory_order_relaxed);
+}
 
 /**
  * @brief Shuts down the controller, stopping playback and cleaning up.
@@ -287,11 +290,13 @@ void MediaPlaybackController::Shutdown() {
 
   _CleanupMedia();
   fTarget = BMessenger();
-  fPlaying = false;
-  fPaused = false;
+  fPlaying.store(false, std::memory_order_relaxed);
+  fPaused.store(false, std::memory_order_relaxed);
 }
 
-bool MediaPlaybackController::IsPaused() const { return fPaused; }
+bool MediaPlaybackController::IsPaused() const {
+  return fPaused.load(std::memory_order_relaxed);
+}
 
 int32 MediaPlaybackController::CurrentIndex() const { return fCurrentIdx; }
 
