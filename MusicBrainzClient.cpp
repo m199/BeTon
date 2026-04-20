@@ -1,15 +1,24 @@
 #include "MusicBrainzClient.h"
 #include "Debug.h"
 
+#include <algorithm>
+#include <cctype>
+#include <cstdio>
+#include <cstring>
 #include <DataIO.h>
+#include <fcntl.h>
 #include <Locker.h>
+#include <memory>
+#include <new>
 #include <OS.h>
+#include <stdexcept>
 #include <String.h>
 #include <Url.h>
+#include <unistd.h>
+
 #include <private/netservices/HttpRequest.h>
 #include <private/netservices/HttpResult.h>
 #include <private/netservices/UrlResult.h>
-#include <unistd.h>
 
 #include <musicbrainz5/Artist.h>
 #include <musicbrainz5/ArtistCredit.h>
@@ -23,13 +32,6 @@
 #include <musicbrainz5/ReleaseGroup.h>
 #include <musicbrainz5/Track.h>
 #include <musicbrainz5/TrackList.h>
-
-#include <algorithm>
-#include <cctype>
-#include <cstdio>
-#include <cstring>
-#include <fcntl.h>
-#include <memory>
 
 /**
  * @class ScopedSilence
@@ -106,7 +108,7 @@ static CMetadata RunQueryWithTimeout(const BString &userAgent,
         } catch (const std::exception &ex) {
           c->error = ex.what();
         } catch (...) {
-          c->error = "Unknown exception";
+          c->error = "Unknown non-std exception in MusicBrainz query";
         }
         return 0;
       },
@@ -297,11 +299,13 @@ MusicBrainzClient::SearchRecording(const BString &artist, const BString &title,
       }
     }
 
+  } catch (const std::bad_alloc &) {
+    throw;
   } catch (const std::exception &e) {
     DEBUG_PRINT("[MBClient] std::exception in SearchRecording: %s\\n",
                 e.what());
   } catch (...) {
-    DEBUG_PRINT("[MBClient] Unknown exception in SearchRecording\\n");
+    DEBUG_PRINT("[MBClient] Unknown non-std exception in SearchRecording\\n");
   }
   return results;
 }
@@ -384,7 +388,13 @@ MusicBrainzClient::GetReleaseDetails(const BString &releaseId,
       }
     }
 
+  } catch (const std::bad_alloc &) {
+    throw;
+  } catch (const std::exception &e) {
+    DEBUG_PRINT("[MBClient] std::exception in GetReleaseDetails: %s\\n",
+                e.what());
   } catch (...) {
+    DEBUG_PRINT("[MBClient] Unknown non-std exception in GetReleaseDetails\\n");
   }
 
   return out;
@@ -467,11 +477,11 @@ int MusicBrainzClient::_FetchUrl(const BString &urlStr,
     fLastCall = system_time();
 
     BMallocIO sink;
-	#if B_HAIKU_VERSION <= B_HAIKU_VERSION_1_BETA_5
-    	BUrl url(urlStr.String());
-	#else
-    	BUrl url(urlStr.String(), true);
-	#endif
+#if B_HAIKU_VERSION <= B_HAIKU_VERSION_1_BETA_5
+    BUrl url(urlStr.String());
+#else
+    BUrl url(urlStr.String(), true);
+#endif
     std::unique_ptr<BUrlRequest> req(
         BUrlProtocolRoster::MakeRequest(url, &sink));
     if (!req) {
@@ -544,8 +554,13 @@ int MusicBrainzClient::_FetchUrl(const BString &urlStr,
     std::memcpy(outBytes.data(), buf, len);
     return 200;
 
+  } catch (const std::bad_alloc &) {
+    throw;
+  } catch (const std::exception &e) {
+    DEBUG_PRINT("[MBClient] std::exception in _FetchUrl: %s\\n", e.what());
+    return 0;
   } catch (...) {
-    DEBUG_PRINT("[MBClient] _FetchUrl: Exception caught.\\n");
+    DEBUG_PRINT("[MBClient] Unknown non-std exception in _FetchUrl\\n");
     return 0;
   }
 }
@@ -574,7 +589,14 @@ MusicBrainzClient::BestReleaseForRecording(const BString &recordingId,
         return BString(rl->Item(0)->ID().c_str());
       }
     }
+  } catch (const std::bad_alloc &) {
+    throw;
+  } catch (const std::exception &e) {
+    DEBUG_PRINT("[MBClient] std::exception in BestReleaseForRecording: %s\\n",
+                e.what());
   } catch (...) {
+    DEBUG_PRINT(
+        "[MBClient] Unknown non-std exception in BestReleaseForRecording\\n");
   }
   return "";
 }

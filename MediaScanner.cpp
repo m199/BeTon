@@ -6,6 +6,7 @@
 #include <Node.h>
 #include <Path.h>
 #include <SupportDefs.h>
+#include <new>
 #include <stack>
 #include <sys/stat.h>
 #include <taglib/fileref.h>
@@ -88,8 +89,8 @@ static bool IsSupportedAudioFile(const BString &path) {
   BString lower(path);
   lower.ToLower();
 
-  static const char *exts[] = {".mp3", ".wav", ".flac", ".ogg", ".opus",
-                               ".m4a", ".aac", ".wma"};
+  static const char *exts[] = {".mp3",  ".wav", ".flac", ".ogg",
+                               ".opus", ".m4a", ".aac",  ".wma"};
 
   for (auto ext : exts) {
     if (lower.EndsWith(ext))
@@ -244,7 +245,13 @@ void MediaScanner::ProcessFile(BEntry &entry) {
       duration = props->lengthInSeconds();
       bitrate = props->bitrate();
     }
+  } catch (const std::bad_alloc &) {
+    throw;
+  } catch (const std::exception &ex) {
+    DEBUG_PRINT("[MediaScanner] Exception parsing '%s': %s\n", path.Path(),
+                ex.what());
   } catch (...) {
+    DEBUG_PRINT("[MediaScanner] Unknown exception parsing '%s'\n", path.Path());
   }
 
   TagData bfsData;

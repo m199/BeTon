@@ -818,7 +818,7 @@ void PropertiesWindow::MessageReceived(BMessage *msg) {
       if (fMbCancel)
         fMbCancel->SetEnabled(true);
       if (fMbStatusView)
-        fMbStatusView->SetText("Hole Metadaten...");
+        fMbStatusView->SetText(B_TRANSLATE("Fetching metadata..."));
 
       auto *payload = new BMessage(MSG_MB_APPLY_ALBUM);
       if (!fIsMulti)
@@ -861,7 +861,7 @@ void PropertiesWindow::MessageReceived(BMessage *msg) {
         if (fMbCancel)
           fMbCancel->SetEnabled(false);
         if (fMbStatusView)
-          fMbStatusView->SetText("Metadaten aktualisiert.");
+          fMbStatusView->SetText(B_TRANSLATE("Metadata updated."));
       }
     }
     break;

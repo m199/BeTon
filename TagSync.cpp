@@ -479,9 +479,15 @@ bool TagSync::WriteTagsToFile(const BPath &path, const TagData &td,
     set_basic_tags(id3 ? static_cast<TagLib::Tag *>(id3) : f.tag(), td);
 
     if (id3) {
-      const TagLib::ID3v2::FrameList &popm = id3->frameList("POPM");
-      for (auto *frame : popm) {
-        id3->removeFrame(frame, true);
+      {
+        std::vector<TagLib::ID3v2::Frame *> toRemove;
+        const TagLib::ID3v2::FrameList &popm = id3->frameList("POPM");
+        for (auto *frame : popm) {
+          toRemove.push_back(frame);
+        }
+        for (auto *frame : toRemove) {
+          id3->removeFrame(frame, true);
+        }
       }
 
       if (td.rating > 0) {
@@ -840,9 +846,16 @@ bool TagSync::WriteEmbeddedCover(const BPath &file, const uint8 *data,
     if (!id3)
       return false;
 
-    TagLib::ID3v2::FrameList apic = id3->frameList("APIC");
-    for (auto it = apic.begin(); it != apic.end(); ++it)
-      id3->removeFrame(*it, true);
+    {
+      std::vector<TagLib::ID3v2::Frame *> toRemove;
+      const TagLib::ID3v2::FrameList &apic = id3->frameList("APIC");
+      for (auto *frame : apic) {
+        toRemove.push_back(frame);
+      }
+      for (auto *frame : toRemove) {
+        id3->removeFrame(frame, true);
+      }
+    }
 
     if (!removeOnly) {
       auto *pic = new TagLib::ID3v2::AttachedPictureFrame;

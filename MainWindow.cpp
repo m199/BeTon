@@ -42,6 +42,7 @@
 #include <View.h>
 #include <algorithm>
 #include <cinttypes>
+#include <new>
 #include <random>
 #include <taglib/audioproperties.h>
 #include <taglib/fileref.h>
@@ -1420,7 +1421,9 @@ void MainWindow::MessageReceived(BMessage *msg) {
             if (bmp) {
               reply.AddPointer("bitmap", bmp);
             }
-            target.SendMessage(&reply);
+            if (target.SendMessage(&reply) != B_OK) {
+              delete bmp;
+            }
           } else {
             delete bmp;
           }
@@ -1642,7 +1645,9 @@ void MainWindow::MessageReceived(BMessage *msg) {
         if (bmp) {
           reply.AddPointer("bitmap", bmp);
         }
-        target.SendMessage(&reply);
+        if (target.SendMessage(&reply) != B_OK) {
+          delete bmp;
+        }
       } else {
         delete bmp;
       }
@@ -2001,11 +2006,14 @@ void MainWindow::MessageReceived(BMessage *msg) {
       DEBUG_PRINT("[MainWindow] SearchRecording returned %zu hits\\n",
                   hits.size());
 
+      std::vector<MBHit> *hitsPtr = new std::vector<MBHit>(hits);
       BMessage completion(MSG_MB_SEARCH_COMPLETE);
-      completion.AddPointer("hits", new std::vector<MBHit>(hits));
+      completion.AddPointer("hits", hitsPtr);
       completion.AddMessenger("replyTo", replyTo);
       completion.AddInt32("generation", gen);
-      BMessenger(this).SendMessage(&completion);
+      if (BMessenger(this).SendMessage(&completion) != B_OK) {
+        delete hitsPtr;
+      }
     });
     break;
   }
@@ -2021,7 +2029,8 @@ void MainWindow::MessageReceived(BMessage *msg) {
     UpdateStatus(B_TRANSLATE("Cancelled by user."));
 
     BMessage msg(MSG_RESET_STATUS);
-    new BMessageRunner(BMessenger(this), &msg, 3000000, 1);
+    delete fStatusRunner;
+    fStatusRunner = new BMessageRunner(BMessenger(this), &msg, 3000000, 1);
     break;
   }
 
@@ -2065,7 +2074,8 @@ void MainWindow::MessageReceived(BMessage *msg) {
 
     UpdateStatus(B_TRANSLATE("Rating updated."));
     BMessage resetMsg(MSG_RESET_STATUS);
-    new BMessageRunner(BMessenger(this), &resetMsg, 2000000, 1);
+    delete fStatusRunner;
+    fStatusRunner = new BMessageRunner(BMessenger(this), &resetMsg, 2000000, 1);
     break;
   }
 
@@ -2126,6 +2136,8 @@ void MainWindow::MessageReceived(BMessage *msg) {
         BMessenger(this).SendMessage(&update);
         if (fCacheManager)
           BMessenger(fCacheManager).SendMessage(&update);
+        if (fPropertiesWindow)
+          BMessenger(fPropertiesWindow).SendMessage(&update);
       }
       i++;
     }
@@ -2482,6 +2494,8 @@ void MainWindow::MessageReceived(BMessage *msg) {
             BMessenger(this).SendMessage(&update);
             if (fCacheManager)
               BMessenger(fCacheManager).SendMessage(&update);
+            if (replyTo.IsValid())
+              replyTo.SendMessage(&update);
           }
           BMessage statusMsg(MSG_STATUS_UPDATE);
           statusMsg.AddString(
@@ -2506,8 +2520,14 @@ void MainWindow::MessageReceived(BMessage *msg) {
           try {
             new MatcherWindow(files, trackInfos, fileToTrackMap,
                               BMessenger(this));
+          } catch (const std::bad_alloc &) {
+            throw;
+          } catch (const std::exception &ex) {
+            DEBUG_PRINT("[MainWindow] Failed to create MatcherWindow: %s\n",
+                        ex.what());
           } catch (...) {
-            DEBUG_PRINT("[MainWindow] Failed to create MatcherWindow!\n");
+            DEBUG_PRINT("[MainWindow] Unknown non-std exception creating "
+                        "MatcherWindow\n");
           }
 
           if (Lock()) {
@@ -2575,6 +2595,8 @@ void MainWindow::MessageReceived(BMessage *msg) {
           if (fCacheManager) {
             BMessenger(fCacheManager).SendMessage(&update);
           }
+          if (replyTo.IsValid())
+            replyTo.SendMessage(&update);
         }
       }
 
