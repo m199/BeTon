@@ -1,200 +1,289 @@
-1	German	application/x-vnd.BeTon	3826593758
-Searching...	PropertiesWindow		Suchen...
-Syncing... %ld/%ld	MainWindow		Synchronisiere... %ld/%ld
+1	German	application/x-vnd.BeTon	612597721
+Error: No data received	MusicBrainzMatcherWindow		Fehler: Keine Daten empfangen
 Generate New Playlist	MainWindow		Neue Playlist erstellen
-Add	DirectoryManagerWindow		Hinzufügen
-Cancelled.	PropertiesWindow		Abgebrochen.
+Up	MusicBrainzMatcherWindow		Hoch
+Album:	MetadataPropertiesWindow		Album:
 Playlists	MainWindow		Playlists
-Apply	PropertiesWindow		Anwenden
-Cancel	SyncConflictDialog		Abbrechen
-Manage Music Folders	DirectoryManagerWindow		Musikordner verwalten
+Title: 	MetadataSyncConflictDialog		Titel: 
 Loading Music Library...	MainWindow		Lade Musikbibliothek...
-Syncing metadata...	MainWindow		Synchronisiere Metadaten...
-Channels: 	MainWindow		Kanäle: 
-Results received.	PropertiesWindow		Ergebnisse empfangen.
-Match tracks (right) to files (left).	MatcherWindow		Titel (rechts) Dateien (links) zuordnen.
-Loading cache... %ld/%zu	MainWindow		Lade Cache... %ld/%zu
-Up	MatcherWindow		Hoch
-File %ld of %ld	SyncConflictDialog		Datei %ld von %ld
-NOT 	PlaylistGeneratorWindow		NICHT 
-%ld  tracks. Total duration %02d:%02d:%02d	MainWindow		%ld Titel. Gesamtdauer %02d:%02d:%02d
-Name:	PlaylistGeneratorWindow		Name:
-Track	ContentColumnView		Titel
-Generate Playlist	PlaylistGeneratorWindow		Playlist erstellen
-Composer:	PropertiesWindow		Komponist:
-MusicBrainz	PropertiesWindow		MusicBrainz
-Album: 	MainWindow		Album: 
-No Genre	LibraryViewManager		Kein Genre
-Adjust Album Matching	MatcherWindow		Album-Zuordnung anpassen
-Configure metadata synchronization:	SyncSettingsDialog		Metadaten-Synchronisation konfigurieren:
-Secondary Source:	SyncSettingsDialog		Sekundäre Quelle:
-Title	ContentColumnView		Titel
-(limited)	MainWindow		(limitiert)
-No files selected	MainWindow		Keine Dateien ausgewählt
-Scanning: %ld folders, %ld files	MainWindow		Scanne: %ld Ordner, %ld Dateien
-MusicBrainz Tracks:	MatcherWindow		MusicBrainz Titel:
-Remove from Playlist	ContentColumnView		Aus Playlist entfernen
-Playlist-Folder set: %s	MainWindow		Playlist-Ordner gesetzt: %s
-MB Track ID:	PropertiesWindow		MB Titel-ID:
-Genre: 	MainWindow		Genre: 
-Cancel	MatcherWindow		Abbrechen
-Synchronize Metadata	MainWindow		Metadaten synchronisieren
-Duration	ContentColumnView		Dauer
-Play	ContentColumnView		Abspielen
-Add	PlaylistGeneratorWindow		Hinzufügen
-Bitrate	ContentColumnView		Bitrate
-Year: 	PlaylistGeneratorWindow		Jahr: 
-New Playlist...	ContentColumnView		Neue Playlist...
-%ld tracks	MainWindow		%ld Titel
-◀ Previous	PropertiesWindow		◀ Vorherige
-Conflict Resolution:	SyncSettingsDialog		Konfliktlösung:
-Properties	PropertiesWindow		Eigenschaften
-Artist: 	SyncConflictDialog		Künstler: 
-Cancelled by user.	MainWindow		Durch Benutzer abgebrochen.
-Apply	SyncConflictDialog		Anwenden
-Artist:	PropertiesWindow		Künstler:
-Generate	PlaylistGeneratorWindow		Erstellen
-Delete	PlaylistListView		Löschen
-Genre:	PlaylistGeneratorWindow		Genre:
-Metadata applied successfully (Auto-Match).	MainWindow		Metadaten erfolgreich gespeichert (Auto-Match).
-Metadata Conflict	SyncConflictDialog		Metadaten-Konflikt
-Artwork	MainWindow		Cover
+New Playlist...	MediaTableView		Neue Playlist...
+Cancel	MusicBrainzMatcherWindow		Abbrechen
+File Information	NowPlayingInfoPanel		Dateiinformationen
+Title:	MetadataPropertiesWindow		Titel:
+Year	MediaTableView		Jahr
+Could not connect to the radio station. The server might be down or unreachable.	RadioStationController		Verbindung zum Radiosender fehlgeschlagen. Der Server ist möglicherweise nicht erreichbar.
+Sync complete	MetadataSyncController		Synchronisation abgeschlossen
+Unmute	ViewStateController		Stummschaltung aufheben
+A DLNA scan is already in progress...	DLNAViewController		Ein DLNA-Scan läuft bereits...
+Fetching metadata from MusicBrainz...	MusicBrainzLookupController		Rufe Metadaten von MusicBrainz ab...
+Genre:	RadioStationEditorDialog		Genre:
+File not found	MetadataPropertiesWindow		Datei nicht gefunden
+Refresh '%s'	DLNAViewController		'%s' aktualisieren
+Rule List	SmartPlaylistGeneratorWindow		Regelliste
+The file could not be found:	PlaybackQueueManager		Die Datei konnte nicht gefunden werden:
+Searching for DLNA devices...	StatusBarController		Suche nach DLNA-Geräten...
+Details	MetadataPropertiesWindow		Details
+Cancelled by user.	MusicBrainzLookupController		Durch Benutzer abgebrochen.
+Indexing DLNA server...	StatusBarController		Indiziere DLNA-Server...
+File Information	MainWindow		Dateiinformationen
+Unknown	NowPlayingInfoPanel		Unbekannt
+◀ Previous	MetadataPropertiesWindow		◀ Vorherige
+New Playlist	SmartPlaylistGeneratorWindow		Neue Playlist
+Indexing '%s'... %ld audio files found	DLNAViewController		Indiziere '%s'... %ld Audiodateien gefunden
+Playing from DLNA server...	DLNAViewController		Wiedergabe vom DLNA-Server...
+Genre:	SmartPlaylistGeneratorWindow		Genre:
+not	SmartPlaylistGeneratorWindow		nicht
+Add	MusicSourceManagerWindow		Hinzufügen
+Connection to radio station failed	RadioStationController		Verbindung zum Radiosender fehlgeschlagen
+Save	MetadataPropertiesWindow		Speichern
+No Language	LibraryBrowserController		Keine Sprache
+Name:	SmartPlaylistGeneratorWindow		Name:
+Multiple files	MetadataPropertiesWindow		Mehrere Dateien
+URL	MediaTableView		URL
+Apply to All	MetadataSyncConflictDialog		Auf alle anwenden
 No Title	MainWindow		Kein Titel
-MusicBrainz: %zu hits.	MainWindow		MusicBrainz: %zu Treffer.
-Appearance	MainWindow		Erscheinungsbild
-Genre	ContentColumnView		Genre
-Artist: 	PlaylistGeneratorWindow		Künstler: 
-Rescan started...	MainWindow		Rescan gestartet...
-Ready.	PropertiesWindow		Bereit.
-Remove	DirectoryManagerWindow		Entfernen
-Genre: 	PlaylistGeneratorWindow		Genre: 
-Primary Source:	SyncSettingsDialog		Primäre Quelle:
-Load Cover...	PropertiesWindow		Cover laden...
-Fetching metadata...	PropertiesWindow		Rufe Metadaten ab...
-Show All Genre	LibraryViewManager		Alle Genres anzeigen
-Ready.	MainWindow		Bereit.
-Apply to All	SyncConflictDialog		Auf alle anwenden
-Cancel	PropertiesWindow		Abbrechen
+Connection failed	RadioStationController		Verbindung fehlgeschlagen
+Apply Selection (Track)	MetadataPropertiesWindow		Auswahl anwenden (Titel)
+Metadata applied successfully (Auto-Match).	MusicBrainzLookupController		Metadaten erfolgreich angewendet (Auto-Match).
+OK	PlaylistNameDialog		OK
+%ld  tracks. Total duration %02d:%02d	StatusBarController		%ld Titel. Gesamtdauer %02d:%02d
+Artist:	MetadataPropertiesWindow		Künstler:
+Show all Country	LibraryBrowserController		Alle Länder anzeigen
+Album Artist:	MetadataPropertiesWindow		Album-Interpret:
+MB Album ID:	MetadataPropertiesWindow		MB Album-ID:
+Preparing DLNA scan...	StatusBarController		Bereite DLNA-Scan vor...
+Scanning: %ld folders, %ld files (%02d:%02d)	LibraryController		Scanne: %ld Ordner, %ld Dateien (%02d:%02d)
 Set Playlist Folder	MainWindow		Playlist-Ordner festlegen
-Album Artist:	PropertiesWindow		Album-Interpret:
-Shuffle Playback	PlaylistGeneratorWindow		Zufallswiedergabe
-OK	DirectoryManagerWindow		OK
+Generate	SmartPlaylistGeneratorWindow		Erstellen
+MusicBrainz: %zu hits.	MusicBrainzLookupController		MusicBrainz: %zu Treffer.
 Help	MainWindow		Hilfe
-Year:	PropertiesWindow		Jahr:
-Max. Tracks	PlaylistGeneratorWindow		Max. Titel
-Year	PlaylistGeneratorWindow		Jahr
-File Information	InfoPanel		Dateiinformationen
-Searching on MusicBrainz...	MainWindow		Suche auf MusicBrainz...
-Scan completed in %02d:%02d, %ld new files	MainWindow		Scan abgeschlossen in %02d:%02d, %ld neue Dateien
+Remove Cover	MetadataPropertiesWindow		Cover entfernen
+Searching on MusicBrainz...	MusicBrainzLookupController		Suche auf MusicBrainz...
+Now playing: %s	RadioStationController		Jetzt läuft: %s
+Previous	ViewStateController		Zurück
+Play	MediaTableView		Abspielen
+Repeat: All	ViewStateController		Wiederholen: Alle
+Title	MediaTableView		Titel
+Next	ViewStateController		Weiter
+MusicBrainz	MetadataPropertiesWindow		MusicBrainz
 New Playlist	MainWindow		Neue Playlist
-%ld  tracks. Total duration %02d:%02d	MainWindow		%ld Titel. Gesamtdauer %02d:%02d
-Metadata applied successfully (Manual).	MainWindow		Metadaten erfolgreich gespeichert (Manuell).
-Disc:	PropertiesWindow		Disk:
-Use Tags	SyncConflictDialog		Tags verwenden
-Rename	PlaylistListView		Umbenennen
-New Playlist	PlaylistGeneratorWindow		Neue Playlist
-Path	ContentColumnView		Pfad
-Playlist '%s' created	MainWindow		Playlist '%s' erstellt
-Generated Playlist	MainWindow		Generierte Playlist
-From:	PlaylistGeneratorWindow		Von:
-not	PlaylistGeneratorWindow		nicht
-MB Album ID:	PropertiesWindow		MB Album-ID:
-Year: 	MainWindow		Jahr: 
-Artist	ContentColumnView		Künstler
-Fetch from MusicBrainz	PropertiesWindow		Von MusicBrainz abrufen
-OK	SyncSettingsDialog		OK
-Artist:\nAlbum:\nTitle:\nYear:\nGenre:\n\nBitrate:\nSample Rate:\nChannels:	InfoPanel		Künstler:\nAlbum:\nTitel:\nJahr:\nGenre:\n\nBitrate:\nAbtastrate:\nKanäle:
-Remove	PlaylistGeneratorWindow		Entfernen
-MusicBrainz: Nothing found.	MainWindow		MusicBrainz: Nichts gefunden.
-OK	NamePrompt		OK
-No Album	LibraryViewManager		Kein Album
-Next ▶	PropertiesWindow		Nächste ▶
-Cancel	PlaylistGeneratorWindow		Abbrechen
-Move Down	ContentColumnView		Runter
-Rule List	PlaylistGeneratorWindow		Regelliste
-Use BFS	SyncConflictDialog		BFS verwenden
-Loading...	MainWindow		Lade...
-: %zu tracks.	MainWindow		: %zu Titel.
-Quit	MainWindow		Beenden
-Manage Cover (Multi-selection: Drop image to set for all)	PropertiesWindow		Cover verwalten (Mehrfachauswahl: Bild ablegen für alle)
-Apply	MatcherWindow		Anwenden
-Add to Playlist	ContentColumnView		Zu Playlist hinzufügen
-Album Functions	PropertiesWindow		Album-Funktionen
+: %zu tracks.	PlaylistEditController		: %zu Titel.
+OK	RadioStationEditorDialog		OK
+Add	SmartPlaylistGeneratorWindow		Hinzufügen
+Cancel	MetadataSyncConflictDialog		Abbrechen
+Sidebar	MainWindow		Seitenleiste
+Apply	MetadataPropertiesWindow		Anwenden
+MB Track ID:	MetadataPropertiesWindow		MB Titel-ID:
+Name:	PlaylistNameDialog		Name:
+Failed to load DLNA cache.	DLNAViewController		DLNA-Cache konnte nicht geladen werden.
+Rename	PlaylistSidebarView		Umbenennen
+Sync Settings	MusicSourceSyncSettingsDialog		Synchronisations-Einstellungen
+Indexing '%s'... %ld album covers	DLNAViewController		Indiziere '%s'... %ld Albumcover
+Disc:	MetadataPropertiesWindow		Disk:
+Show all Album	LibraryBrowserController		Alle Alben anzeigen
+Metadata Conflict	MetadataSyncConflictDialog		Metadaten-Konflikt
+(mixed)	PlaylistEditController		(gemischt)
+From:	SmartPlaylistGeneratorWindow		Von:
+Cancel	RadioStationEditorDialog		Abbrechen
+Album Artist	MediaTableView		Album-Interpret
+Files:	MusicBrainzMatcherWindow		Dateien:
+Playlist '%s' created	PlaylistEditController		Playlist '%s' erstellt
+Add to Playlist	MediaTableView		Zu Playlist hinzufügen
+Playlist-Folder set: %s	PlaylistEditController		Playlist-Ordner gesetzt: %s
+Track	MediaTableView		Titel
+Cancelled.	MetadataPropertiesWindow		Abgebrochen.
 System Default	MainWindow		Systemstandard
-Sync cancelled	MainWindow		Synchronisation abgebrochen
-Properties - 	PropertiesWindow		Eigenschaften - 
-Album Artist	ContentColumnView		Album-Interpret
-Move Up	ContentColumnView		Hoch
-Cancelled.	MainWindow		Abgebrochen.
-Cancel	SyncSettingsDialog		Abbrechen
-Value:	PlaylistGeneratorWindow		Wert:
-Cancel	NamePrompt		Abbrechen
-Year	ContentColumnView		Jahr
-Tags	SyncConflictDialog		Tags
-Limit:	PlaylistGeneratorWindow		Limit:
-Bitrate: 	MainWindow		Bitrate: 
+OK	MusicSourceSyncSettingsDialog		OK
+Track:	MetadataPropertiesWindow		Titel:
+File not found.	PlaybackQueueManager		Datei nicht gefunden.
+No results found.	MetadataPropertiesWindow		Keine Ergebnisse gefunden.
+Error: Release ID not found.	MusicBrainzLookupController		Fehler: Release-ID nicht gefunden.
+Generate Playlist	SmartPlaylistGeneratorWindow		Playlist erstellen
 Match SeekBar	MainWindow		SeekBar anpassen
-Sync complete	MainWindow		Synchronisation abgeschlossen
-File	MainWindow		Datei
-Error: No data received	MatcherWindow		Fehler: Keine Daten empfangen
-Artwork	PropertiesWindow		Cover
-Details	PropertiesWindow		Details
-Album:	PropertiesWindow		Album:
- Files	PropertiesWindow		 Dateien
-(mixed)	MainWindow		(gemischt)
+Ready.	MusicBrainzLookupController		Bereit.
+Buffering audio stream...	RadioStationController		Puffere Audiostream...
+Indexing '%s'...	StatusBarController		Indiziere '%s'...
+Configure metadata synchronization:	MusicSourceSyncSettingsDialog		Metadaten-Synchronisation konfigurieren:
+Secondary Source:	MusicSourceSyncSettingsDialog		Sekundäre Quelle:
 Off	MainWindow		Aus
-Disc	ContentColumnView		Disk
-Sync Settings	SyncSettingsDialog		Synchronisations-Einstellungen
-Add to Album	PropertiesWindow		Zu Album hinzufügen
-Artist: 	MainWindow		Künstler: 
-%ld tracks. Total duration %02d:%02d	MainWindow		%ld Titel. Gesamtdauer %02d:%02d
-Apply Selection (Album)	PropertiesWindow		Auswahl anwenden (Album)
-Title: 	MainWindow		Titel: 
-Comment:	PropertiesWindow		Kommentar:
-No Artist	LibraryViewManager		Kein Künstler
-Rescan	MainWindow		Rescan
-Show All Album	LibraryViewManager		Alle Alben anzeigen
-Artist:\nAlbum:\nTitle:\nYear:\nGenre:\n\nBitrate:\nSample Rate:\nChannels:	MainWindow		Künstler:\nAlbum:\nTitel:\nJahr:\nGenre:\n\nBitrate:\nAbtastrate:\nKanäle:
-Fetching metadata from MusicBrainz...	MainWindow		Rufe Metadaten von MusicBrainz ab...
-Define Rule	PlaylistGeneratorWindow		Regel definieren
-of	PropertiesWindow		von
-Manage Music Folders	MainWindow		Musikordner verwalten
-Metadata successfully saved.	MainWindow		Metadaten erfolgreich gespeichert.
-BFS Attributes	SyncConflictDialog		BFS-Attribute
-%ld tracks. Total duration %02d:%02d:%02d	MainWindow		%ld Titel. Gesamtdauer %02d:%02d:%02d
-Track:	PropertiesWindow		Titel:
-<-- No Match -->	MatcherWindow		<-- Kein Treffer -->
+Disc	MediaTableView		Disk
+%ld files	MetadataPropertiesWindow		%ld Dateien
+Cancelled.	MusicBrainzLookupController		Abgebrochen.
+Cancel	SmartPlaylistGeneratorWindow		Abbrechen
+Value:	SmartPlaylistGeneratorWindow		Wert:
+Station	MediaTableView		Sender
+Remove from Album	MetadataPropertiesWindow		Aus Album entfernen
+Genre	SmartPlaylistGeneratorWindow		Genre
+Now Playing	MainWindow		Aktuelle Wiedergabe
+Apply	MusicBrainzMatcherWindow		Anwenden
+Indexing '%s'... matching album covers	DLNAViewController		Indiziere '%s'... gleiche Albumcover ab
+Enable DLNA	MainWindow		DLNA aktivieren
+Connecting to radio station...	RadioStationController		Verbinde mit Radiosender...
+Album Cover	MainWindow		Albumcover
+MIDI: Only BFS attributes supported	MetadataPropertiesWindow		MIDI: Nur BFS-Attribute werden unterstützt
+Properties	MetadataPropertiesWindow		Eigenschaften
+Down	MusicBrainzMatcherWindow		Runter
+Artist	SmartPlaylistGeneratorWindow		Künstler
+Path	MediaTableView		Pfad
 About BeTon…	MainWindow		Über BeTon...
-Playlist	NamePrompt		Playlist
-Sample Rate: 	MainWindow		Abtastrate: 
-Remove Cover	PropertiesWindow		Cover entfernen
-Manage Cover	PropertiesWindow		Cover verwalten
-Error: Release ID not found.	MainWindow		Fehler: Release-ID nicht gefunden.
-<no playlists>	ContentColumnView		<keine Playlists>
-Album: 	SyncConflictDialog		Album: 
-To:	PlaylistGeneratorWindow		Bis:
-Apply Selection (Track)	PropertiesWindow		Auswahl anwenden (Titel)
-Title:	PropertiesWindow		Titel:
-No Limit	PlaylistGeneratorWindow		Kein Limit
-Scanning: %ld folders, %ld files (%02d:%02d)	MainWindow		Scanne: %ld Ordner, %ld Dateien (%02d:%02d)
-Name:	NamePrompt		Name:
-Title: 	SyncConflictDialog		Titel: 
-Show All Artist	LibraryViewManager		Alle Künstler anzeigen
-Files:	MatcherWindow		Dateien:
-Criterion:	PlaylistGeneratorWindow		Kriterium:
-Tooltips	MainWindow		Tooltips
-Rating updated.	MainWindow		Bewertung aktualisiert.
-Save	PropertiesWindow		Speichern
-Genre	PlaylistGeneratorWindow		Genre
-Remove from Album	PropertiesWindow		Aus Album entfernen
-Selection Color	MainWindow		Auswahlfarbe
+Show in Tracker	MediaTableView		Im Tracker anzeigen
+Saving metadata...	PropertiesController		Speichere Metadaten...
+%ld  tracks. Total duration %02d:%02d:%02d	StatusBarController		%ld Titel. Gesamtdauer %02d:%02d:%02d
+<no playlists>	MediaTableView		<keine Playlists>
+Indexing '%s'... saving %ld items	DLNAViewController		Indiziere '%s'... speichere %ld Einträge
+Max. Tracks	SmartPlaylistGeneratorWindow		Max. Titel
+Mute	ViewStateController		Stummschalten
+Genre	MediaTableView		Genre
+Now Playing (DLNA)	MainWindow		Aktuelle Wiedergabe (DLNA)
+Radio stopped	PlaybackTransportController		Radio gestoppt
+OK	MusicSourceManagerWindow		OK
+Load Cover...	MetadataPropertiesWindow		Cover laden...
+Files	MetadataPropertiesWindow		Dateien
+Criterion:	SmartPlaylistGeneratorWindow		Kriterium:
+Generated Playlist	PlaylistEditController		Generierte Playlist
+Import m3u/pls...	MediaTableView		m3u/pls importieren...
+No Album	LibraryBrowserController		Kein Album
+<-- No Match -->	MusicBrainzMatcherWindow		<-- Kein Treffer -->
 On	MainWindow		An
-Search	PropertiesWindow		Suchen
-Artist	PlaylistGeneratorWindow		Künstler
-Show in Tracker	ContentColumnView		Im Tracker anzeigen
-Properties...	ContentColumnView		Eigenschaften...
-Album	ContentColumnView		Album
-Rating	ContentColumnView		Bewertung
-Genre:	PropertiesWindow		Genre:
-Max. Duration (Min)	PlaylistGeneratorWindow		Max. Dauer (Min)
-Down	MatcherWindow		Runter
+Remove	MusicSourceManagerWindow		Entfernen
+Syncing... %ld/%ld	MetadataSyncController		Synchronisiere... %ld/%ld
+Repeat: Off	ViewStateController		Wiederholen: Aus
+Rating	MediaTableView		Bewertung
+Metadata successfully saved.	MusicBrainzLookupController		Metadaten erfolgreich gespeichert.
+Indexing '%s'... finalizing %ld items	DLNAViewController		Indiziere '%s'... schließe %ld Einträge ab
+Country:	RadioStationEditorDialog		Land:
+%ld tracks. Total duration %02d:%02d:%02d	StatusBarController		%ld Titel. Gesamtdauer %02d:%02d:%02d
+Composer:	MetadataPropertiesWindow		Komponist:
+File not found	PlaybackQueueManager		Datei nicht gefunden
+Language:	RadioStationEditorDialog		Sprache:
+Year	SmartPlaylistGeneratorWindow		Jahr
+(limited)	PlaylistEditController		(limitiert)
+Playlist	PlaylistNameDialog		Playlist
+Properties - 	MetadataPropertiesWindow		Eigenschaften - 
+Language	MediaTableView		Sprache
+Stop	ViewStateController		Stopp
+Move Down	MediaTableView		Runter
+Adjust Album Matching	MusicBrainzMatcherWindow		Album-Zuordnung anpassen
+OK	RadioStationController		OK
+Artist	MediaTableView		Künstler
+Limit:	SmartPlaylistGeneratorWindow		Limit:
+Primary Source:	MusicSourceSyncSettingsDialog		Primäre Quelle:
+Resolving stream URL...	RadioStationController		Stream-URL wird aufgelöst...
+Match tracks (right) to files (left).	MusicBrainzMatcherWindow		Titel (rechts) Dateien (links) zuordnen.
+URL:	RadioStationEditorDialog		URL:
+Synchronize Metadata	MainWindow		Metadaten synchronisieren
+Name:	RadioStationEditorDialog		Name:
+Rating: some files are read-only.	PropertiesController		Bewertung: Einige Dateien sind schreibgeschützt.
+Scan completed in %02d:%02d, %ld new files	LibraryController		Scan abgeschlossen in %02d:%02d, %ld neue Dateien
+Fetching cover...	MetadataPropertiesWindow		Rufe Cover ab...
+Shuffle Playback	SmartPlaylistGeneratorWindow		Zufallswiedergabe
+Edit Station...	MediaTableView		Sender bearbeiten...
+Read-Only	MetadataPropertiesWindow		Schreibgeschützt
+BFS Attributes	MetadataSyncConflictDialog		BFS-Attribute
+Year:	MetadataPropertiesWindow		Jahr:
+Shuffle: Off	ViewStateController		Zufall: Aus
+Sync complete	SyncMessageHandler		Synchronisation abgeschlossen
+Use BFS	MetadataSyncConflictDialog		BFS verwenden
+To:	SmartPlaylistGeneratorWindow		Bis:
+Cancel	MusicSourceSyncSettingsDialog		Abbrechen
+Settings	MusicSourceManagerWindow		Einstellungen
+Rating updated.	PropertiesController		Bewertung aktualisiert.
+Add Station	RadioStationEditorDialog		Sender hinzufügen
+Conflict Resolution:	MusicSourceSyncSettingsDialog		Konfliktlösung:
+MusicBrainz Tracks:	MusicBrainzMatcherWindow		MusicBrainz-Titel:
+%ld tracks. Total duration %02d:%02d	StatusBarController		%ld Titel. Gesamtdauer %02d:%02d
+Album	MediaTableView		Album
+Properties...	MediaTableView		Eigenschaften...
+Comment:	MetadataPropertiesWindow		Kommentar:
+Genre:	MetadataPropertiesWindow		Genre:
+Ready	RadioStationController		Bereit
+of	MetadataPropertiesWindow		von
+Unsupported stream format	RadioStationController		Nicht unterstütztes Stream-Format
+Preparing DLNA scan for '%s'...	DLNAViewController		Bereite DLNA-Scan für '%s' vor...
+Duration	MediaTableView		Dauer
+Remove from Playlist	MediaTableView		Aus Playlist entfernen
+No cover found.	MetadataPropertiesWindow		Kein Cover gefunden.
+Cancel	PlaylistNameDialog		Abbrechen
+Artist: 	SmartPlaylistGeneratorWindow		Künstler: 
+Metadata applied successfully (Manual).	MusicBrainzLookupController		Metadaten erfolgreich angewendet (Manuell).
+Syncing metadata...	MetadataSyncController		Synchronisiere Metadaten...
+Edit Station	RadioStationEditorDialog		Sender bearbeiten
+Loading cache... %ld/%zu	LibraryController		Lade Cache... %ld/%zu
+No files selected	MetadataSyncController		Keine Dateien ausgewählt
+Rescan started...	LibraryController		Rescan gestartet...
+Searching for DLNA devices...	DLNAViewController		Suche nach DLNA-Geräten...
+Enable Radio	MainWindow		Radio aktivieren
+Define Rule	SmartPlaylistGeneratorWindow		Regel definieren
+Preparing DLNA scan for '%s'...	StatusBarController		Bereite DLNA-Scan für '%s' vor...
+Writing metadata...	MusicBrainzLookupController		Schreibe Metadaten...
+%ld results found.	MetadataPropertiesWindow		%ld Ergebnisse gefunden.
+Bitrate	MediaTableView		Bitrate
+Filters	MainWindow		Filter
+Repeat: One	ViewStateController		Wiederholen: Eins
+Loading...	MainWindow		Lade...
+Move Up	MediaTableView		Hoch
+Quit	MainWindow		Beenden
+Manage Music Folders	MusicSourceManagerWindow		Musikordner verwalten
+Mixed rating	MetadataPropertiesWindow		Gemischte Bewertung
+No Country	LibraryBrowserController		Kein Land
+Fetch from MusicBrainz	MetadataPropertiesWindow		Von MusicBrainz abrufen
+Show all Genre	LibraryBrowserController		Alle Genres anzeigen
+Country	MediaTableView		Land
+Add Station...	MediaTableView		Sender hinzufügen...
+Ready.	MetadataPropertiesWindow		Bereit.
+Delete	PlaylistSidebarView		Löschen
+Next ▶	MetadataPropertiesWindow		Nächste ▶
+Use Tags	MetadataSyncConflictDialog		Tags verwenden
+Pause	ViewStateController		Pause
+%ld tracks	StatusBarController		%ld Titel
+Album: 	MetadataSyncConflictDialog		Album: 
+Fetching metadata...	MetadataPropertiesWindow		Rufe Metadaten ab...
+Apply	MetadataSyncConflictDialog		Anwenden
+Found '%s'. Preparing DLNA scan...	DLNAViewController		'%s' gefunden. Bereite DLNA-Scan vor...
+Now Playing (Radio)	MainWindow		Aktuelle Wiedergabe (Radio)
+Sync cancelled	MetadataSyncController		Synchronisation abgebrochen
+Genre: 	SmartPlaylistGeneratorWindow		Genre: 
+Shuffle: On	ViewStateController		Zufall: An
+File	MainWindow		Datei
+Format not supported	RadioStationController		Format nicht unterstützt
+Apply Selection (Album)	MetadataPropertiesWindow		Auswahl anwenden (Album)
+No results found.	StatusBarController		Keine Ergebnisse gefunden.
+Play	ViewStateController		Abspielen
+Metadata updated.	MetadataPropertiesWindow		Metadaten aktualisiert.
+Rescan	MainWindow		Rescan
+Indexing '%s'... %ld items	DLNAViewController		Indiziere '%s'... %ld Einträge
+Artist: 	MetadataSyncConflictDialog		Künstler: 
+Manage Music Folders	MainWindow		Musikordner verwalten
+This radio station uses a format that is currently not supported by BeTon or the Haiku Media Kit.	RadioStationController		Dieser Radiosender verwendet ein Format, das derzeit von BeTon oder dem Haiku Media Kit nicht unterstützt wird.
+Cancel	MetadataPropertiesWindow		Abbrechen
+No Artist	LibraryBrowserController		Kein Künstler
+Add to Album	MetadataPropertiesWindow		Zu Album hinzufügen
+Delete Station	MediaTableView		Sender löschen
+Scanning: %ld folders, %ld files	LibraryController		Scanne: %ld Ordner, %ld Dateien
+Show all Language	LibraryBrowserController		Alle Sprachen anzeigen
+NOT 	SmartPlaylistGeneratorWindow		NICHT 
+File %ld of %ld	MetadataSyncConflictDialog		Datei %ld von %ld
+No Limit	SmartPlaylistGeneratorWindow		Kein Limit
+Tooltips	MainWindow		Tooltips
+Year: 	SmartPlaylistGeneratorWindow		Jahr: 
+Search	MetadataPropertiesWindow		Suchen
+No Media	NowPlayingInfoPanel		Keine Medien
+Remove	SmartPlaylistGeneratorWindow		Entfernen
+No Cover	ArtworkView		Kein Cover
+OK	PlaybackQueueManager		OK
+Indexing DLNA server...	DLNAViewController		Indiziere DLNA-Server...
+Selection Color	MainWindow		Auswahlfarbe
+MusicBrainz: Nothing found.	MusicBrainzLookupController		MusicBrainz: Nichts gefunden.
+Max. Duration (Min)	SmartPlaylistGeneratorWindow		Max. Dauer (Min)
+Show all Artist	LibraryBrowserController		Alle Künstler anzeigen
+Settings	MainWindow		Einstellungen
+Tags	MetadataSyncConflictDialog		Tags
+No Genre	LibraryBrowserController		Kein Genre
+Searching...	MetadataPropertiesWindow		Suchen...
+Retry	RadioStationController		Erneut versuchen
+Cancel	RadioStationController		Abbrechen
+DLNA item unavailable	DLNAViewController		DLNA-Eintrag nicht verfügbar
+Ready	DLNAViewController		Bereit
+OK	DLNAViewController		OK
+This DLNA item is no longer available. The server may be offline or the file may have been removed.	DLNAViewController		Dieser DLNA-Eintrag ist nicht mehr verfügbar. Der Server ist möglicherweise offline oder die Datei wurde entfernt.
+'%s' is no longer available. The server may be offline or the file may have been removed.	DLNAViewController		'%s' ist nicht mehr verfügbar. Der Server ist möglicherweise offline oder die Datei wurde entfernt.
