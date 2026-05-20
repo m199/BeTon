@@ -30,7 +30,7 @@ A native music player for Haiku.
 Install via `pkgman`:
 
 ```bash
-pkgman install taglib_devel musicbrainz_devel ffmpeg6_devel or ffmpeg7_devel
+pkgman install taglib_devel musicbrainz_devel ffmpeg6_devel or ffmpeg7_devel or ffmpeg8_devel
 ```
 
 ## Building
