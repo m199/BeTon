@@ -55,6 +55,33 @@ static void AddTagDataToMediaUpdate(BMessage &update, const TagData &td) {
   update.AddInt32("rating", td.rating);
 }
 
+static void ReadMetadataForConfiguredTargets(const BString &filePath,
+                                             TagData &td) {
+  BPath path(filePath.String());
+  MetadataWriteTargets targets = MetadataTagIO::WriteTargetsForPath(filePath);
+
+  if (!targets.tags && targets.bfs)
+    MetadataTagIO::ReadBfsAttributes(path, td);
+  else
+    MetadataTagIO::ReadTags(path, td);
+}
+
+static void WriteMetadataForConfiguredTargets(const BString &filePath,
+                                              const TagData &td,
+                                              const CoverBlob *cover) {
+  BPath path(filePath.String());
+  MetadataWriteTargets targets = MetadataTagIO::WriteTargetsForPath(filePath);
+
+  if (targets.tags)
+    MetadataTagIO::WriteTags(path, td);
+
+  if (cover && cover->size() > 0)
+    MetadataTagIO::WriteEmbeddedCover(path, *cover);
+
+  if (targets.bfs)
+    MetadataTagIO::WriteBfsAttributes(path, td, nullptr);
+}
+
 /**
  * @brief Constructs lookup controller bound to the main window.
  */
@@ -536,7 +563,7 @@ void MusicBrainzLookupController::ApplyMetadata(BMessage *msg) {
 
           const MBTrack &trk = rel.tracks[tIdx];
           TagData td;
-          MetadataTagIO::ReadTags(BPath(files[i].String()), td);
+          ReadMetadataForConfiguredTargets(files[i], td);
 
           td.artist = rel.albumArtist;
           td.album = rel.album;
@@ -549,11 +576,7 @@ void MusicBrainzLookupController::ApplyMetadata(BMessage *msg) {
           td.mbAlbumID = rel.releaseId;
           td.mbTrackID = trk.recordingId;
 
-          MetadataTagIO::WriteTags(BPath(files[i].String()), td);
-          if (coverBlob.size() > 0)
-            MetadataTagIO::WriteEmbeddedCover(BPath(files[i].String()), coverBlob);
-
-          MetadataTagIO::WriteBfsAttributes(BPath(files[i].String()), td, nullptr);
+          WriteMetadataForConfiguredTargets(files[i], td, &coverBlob);
           BMessage update(MSG_MEDIA_ITEM_FOUND);
           update.AddString("path", files[i]);
           AddTagDataToMediaUpdate(update, td);
@@ -603,7 +626,7 @@ void MusicBrainzLookupController::ApplyMetadata(BMessage *msg) {
     } else {
       for (const auto &path : files) {
         TagData td;
-        MetadataTagIO::ReadTags(BPath(path.String()), td);
+        ReadMetadataForConfiguredTargets(path, td);
 
         const MBTrack *trkMatch = nullptr;
         for (const auto &t : rel.tracks) {
@@ -635,10 +658,7 @@ void MusicBrainzLookupController::ApplyMetadata(BMessage *msg) {
           td.disc = trkMatch->disc;
         }
 
-        MetadataTagIO::WriteTags(BPath(path.String()), td);
-        if (coverBlob.size() > 0)
-          MetadataTagIO::WriteEmbeddedCover(BPath(path.String()), coverBlob);
-        MetadataTagIO::WriteBfsAttributes(BPath(path.String()), td, nullptr);
+        WriteMetadataForConfiguredTargets(path, td, &coverBlob);
 
         BMessage update(MSG_MEDIA_ITEM_FOUND);
         update.AddString("path", path);
@@ -717,7 +737,7 @@ void MusicBrainzLookupController::ApplyMatch(BMessage *msg) {
       BString filePath = matchedFiles[idx];
 
       TagData td;
-      MetadataTagIO::ReadTags(BPath(filePath.String()), td);
+      ReadMetadataForConfiguredTargets(filePath, td);
 
       td.artist = pendingRelease.albumArtist;
       td.album = pendingRelease.album;
@@ -735,11 +755,7 @@ void MusicBrainzLookupController::ApplyMatch(BMessage *msg) {
       DEBUG_PRINT("    MB Track ID: %s\n", td.mbTrackID.String());
       DEBUG_PRINT("    MB Album ID: %s\n", td.mbAlbumID.String());
 
-      MetadataTagIO::WriteTags(BPath(filePath.String()), td);
-      if (pendingCoverBlob.size() > 0)
-        MetadataTagIO::WriteEmbeddedCover(BPath(filePath.String()),
-                                    pendingCoverBlob);
-      MetadataTagIO::WriteBfsAttributes(BPath(filePath.String()), td, nullptr);
+      WriteMetadataForConfiguredTargets(filePath, td, &pendingCoverBlob);
 
       BMessage update(MSG_MEDIA_ITEM_FOUND);
       update.AddString("path", filePath);

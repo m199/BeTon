@@ -98,15 +98,13 @@ void MetadataService::SaveTags(const BMessage *msg) {
       continue;
 
     BPath path(file.String());
-    BString lowerPath(file);
-    lowerPath.ToLower();
-    bool isMidiFile = false;
-#if ENABLE_MIDI_PLAYBACK
-    isMidiFile = lowerPath.EndsWith(".mid") || lowerPath.EndsWith(".midi");
-#endif
+    MetadataWriteTargets targets = MetadataTagIO::WriteTargetsForPath(file);
 
     TagData td;
-    MetadataTagIO::ReadTags(path, td);
+    if (!targets.tags && targets.bfs)
+      MetadataTagIO::ReadBfsAttributes(path, td);
+    else
+      MetadataTagIO::ReadTags(path, td);
     bool hasRating = false;
 
     BString s;
@@ -157,15 +155,19 @@ void MetadataService::SaveTags(const BMessage *msg) {
     DEBUG_PRINT("SaveTags: Writing metadata. "
                 "mbAlbumID='%s', mbTrackID='%s'\n",
                 td.mbAlbumID.String(), td.mbTrackID.String());
-    bool ok = isMidiFile ? MetadataTagIO::WriteBfsAttributes(path, td, nullptr)
-                         : MetadataTagIO::WriteTagsToFile(path, td, nullptr);
-    if (ok) {
-      TagData tdSaved;
-      MetadataTagIO::ReadTags(path, tdSaved);
-      if (hasRating)
-        tdSaved.rating = td.rating;
+    bool ok = false;
+    if (targets.tags) {
+      ok = MetadataTagIO::WriteTagsToFile(path, td, nullptr);
+    } else if (targets.bfs) {
+      ok = MetadataTagIO::WriteBfsAttributes(path, td, nullptr);
+    }
 
-      if (MetadataTagIO::IsBeFsVolume(path)) {
+    if (ok) {
+      if (targets.tags && targets.bfs && MetadataTagIO::IsBeFsVolume(path)) {
+        TagData tdSaved;
+        MetadataTagIO::ReadTags(path, tdSaved);
+        if (hasRating)
+          tdSaved.rating = td.rating;
         MetadataTagIO::WriteBfsAttributes(path, tdSaved, nullptr, 512 * 1024);
       }
 

@@ -1,4 +1,5 @@
 #include "MetadataTagIO.h"
+#include "Config.h"
 #include "Debug.h"
 #include "MusicSourceSettings.h"
 
@@ -748,6 +749,26 @@ bool MetadataTagIO::WriteTagsToFile(const BPath &path, const TagData &td,
  */
 bool MetadataTagIO::WriteTags(const BPath &path, const TagData &in) {
   return WriteTagsToFile(path, in, nullptr);
+}
+
+MetadataWriteTargets MetadataTagIO::WriteTargetsForPath(
+    const BString &filePath) {
+  MusicSourceSettings src = MusicSourceSettings::GetSourceForPath(filePath);
+
+  BString lowerPath(filePath);
+  lowerPath.ToLower();
+
+  bool isMidiFile = false;
+#if ENABLE_MIDI_PLAYBACK
+  isMidiFile = lowerPath.EndsWith(".mid") || lowerPath.EndsWith(".midi");
+#endif
+
+  MetadataWriteTargets targets;
+  targets.tags = !isMidiFile && (src.primary == SOURCE_TAGS ||
+                                 src.secondary == SOURCE_TAGS);
+  targets.bfs = isMidiFile || (src.primary == SOURCE_BFS ||
+                               src.secondary == SOURCE_BFS);
+  return targets;
 }
 
 /**

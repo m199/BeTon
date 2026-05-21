@@ -134,6 +134,15 @@ struct CoverBlob {
 };
 
 /**
+ * @struct MetadataWriteTargets
+ * @brief Describes where editable text metadata should be written.
+ */
+struct MetadataWriteTargets {
+  bool tags = false;
+  bool bfs = false;
+};
+
+/**
  * @namespace MetadataTagIO
  * @brief Utilities for reading and writing audio file metadata.
  */
@@ -218,6 +227,13 @@ bool WriteTagsToFile(const BPath &path, const TagData &td,
  * @return True on success.
  */
 bool WriteTags(const BPath &path, const TagData &in);
+
+/**
+ * @brief Resolves the configured metadata write targets for a file path.
+ * @param filePath Absolute file path.
+ * @return Enabled write targets according to MusicSourceSettings.
+ */
+MetadataWriteTargets WriteTargetsForPath(const BString &filePath);
 
 /**
  * @brief Mirrors metadata and cover art to BFS attributes.
