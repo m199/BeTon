@@ -10,6 +10,7 @@
 #include <File.h>
 #include <FindDirectory.h>
 #include <Message.h>
+#include <OS.h>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -336,7 +337,11 @@ status_t DLNAService::_FetchDeviceDescription(const BString& location,
                                                DLNADevice& dev)
 {
     BMallocIO sink;
+#if B_HAIKU_VERSION <= B_HAIKU_VERSION_1_BETA_5
+    BUrl burl(location.String());
+#else
     BUrl burl(location.String(), false);
+#endif
     std::unique_ptr<BUrlRequest> req(
         BUrlProtocolRoster::MakeRequest(burl, &sink, nullptr, &fUrlContext));
     if (!req)
@@ -517,7 +522,11 @@ status_t DLNAService::_SendSoapAction(const BString& controlUrl,
              << "</s:Body></s:Envelope>";
 
     BMallocIO sink;
+#if B_HAIKU_VERSION <= B_HAIKU_VERSION_1_BETA_5
+    BUrl burl(controlUrl.String());
+#else
     BUrl burl(controlUrl.String(), false);
+#endif
     std::unique_ptr<BUrlRequest> req(
         BUrlProtocolRoster::MakeRequest(burl, &sink, nullptr, nullptr));
     if (!req)

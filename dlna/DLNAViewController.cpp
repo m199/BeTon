@@ -396,9 +396,16 @@ void DLNAViewController::SelectRenderer(BMessage *msg) {
   if (fWindow->fPlaybackEngine && fWindow->fPlaybackEngine->IsPlaying()) {
     if (fWindow->fIsRadioMode && fWindow->fRadioStationController &&
         fWindow->fRadioStationController->HasActiveStation()) {
+      const char *stationUrl =
+          fWindow->fRadioStationController->ActiveStationUrl().String();
+#if B_HAIKU_VERSION <= B_HAIKU_VERSION_1_BETA_5
+      BUrl url(stationUrl);
+#else
+      BUrl url(stationUrl, true);
+#endif
       fWindow->fPlaybackEngine->PlayUrl(
-          BUrl(fWindow->fRadioStationController->ActiveStationUrl().String(), true),
-          fWindow->fRadioStationController->ActiveStationName().String(), 0, nullptr);
+          url, fWindow->fRadioStationController->ActiveStationName().String(),
+          0, nullptr);
     } else {
       int32 idx = fWindow->fPlaybackEngine->CurrentIndex();
       if (idx >= 0)
@@ -801,7 +808,11 @@ void DLNAViewController::PlayIndex(int32 index) {
   }
 
   fWindow->LaunchThread("dlna_play", [ctrl, itemPath, title, duration, ctx]() {
+#if B_HAIKU_VERSION <= B_HAIKU_VERSION_1_BETA_5
+    BUrl url(itemPath.String());
+#else
     BUrl url(itemPath.String(), false);
+#endif
     ctrl->PlayUrl(url, title.String(), duration, ctx);
   });
 

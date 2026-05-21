@@ -861,10 +861,11 @@ BRow *MediaTableView::_CreateRow(const MediaItem &mi, int32 playlistIndex) {
 }
 
 /**
- * @brief Adds a batch of pending items using the bulk AddRows API.
+ * @brief Adds a batch of pending items.
  *
- * Builds all BRow objects first, then inserts them in a single
- * AddRows() call to avoid O(N^2) per-row array-shift overhead.
+ * Builds all BRow objects first, then uses AddRows() where available
+ * to avoid O(N^2) per-row array-shift overhead. Haiku R1/beta5 falls
+ * back to AddRow() for API compatibility.
  *
  * @param count The number of items to add in this batch.
  */
@@ -889,8 +890,17 @@ void MediaTableView::_AddBatch(size_t count) {
   }
 
   bigtime_t t1 = system_time();
+#if B_HAIKU_VERSION <= B_HAIKU_VERSION_1_BETA_5
+  // Deprecated after Haiku R1/beta6: AddRows() is not available on beta5.
+  // Remove this fallback once beta5 support is dropped.
+  for (int32 i = 0; i < rowList.CountItems(); ++i) {
+    if (BRow *row = static_cast<BRow *>(rowList.ItemAt(i)))
+      AddRow(row);
+  }
+#else
   int32 insertAt = CountRows();
   AddRows(&rowList, insertAt);
+#endif
 
   bigtime_t t2 = system_time();
 
@@ -934,7 +944,7 @@ void MediaTableView::_AddBatch(size_t count) {
     win->EnableUpdates();
 
   DEBUG_PRINT("_AddBatch(%zu): CreateRows=%lld us, "
-             "AddRows=%lld us, sortRestore=%lld us, total rows=%ld\n",
+             "insertRows=%lld us, sortRestore=%lld us, total rows=%ld\n",
              count, (long long)(t1 - t0), (long long)(t2 - t1),
              (long long)(t3 - t2), (long)CountRows());
 

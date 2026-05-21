@@ -31,6 +31,26 @@ extern "C" {
 
 namespace {
 
+std::atomic<bool> sFfmpegNetworkInitialized(false);
+
+void EnsureFfmpegNetworkInitialized() {
+  bool expected = false;
+  if (sFfmpegNetworkInitialized.compare_exchange_strong(expected, true))
+    avformat_network_init();
+}
+
+void MaybeDeinitFfmpegNetwork() {
+#if B_HAIKU_VERSION <= B_HAIKU_VERSION_1_BETA_5
+  // Deprecated after Haiku R1/beta6: beta5 can crash in stream threads when
+  // FFmpeg's global network state is repeatedly init/deinit'ed.
+  // Keep it initialized for the process lifetime while beta5 is supported.
+#else
+  bool expected = true;
+  if (sFfmpegNetworkInitialized.compare_exchange_strong(expected, false))
+    avformat_network_deinit();
+#endif
+}
+
 uint32 ReadBE32(const uint8 *data) {
   return ((uint32)data[0] << 24) | ((uint32)data[1] << 16) |
          ((uint32)data[2] << 8) | data[3];
@@ -950,10 +970,16 @@ status_t NetworkAudioStreamIO::Open(const BString &url, Mode mode,
   fPendingSeekTime = -1;
   memset(&fHlsFormat, 0, sizeof(fHlsFormat));
 
+  EnsureFfmpegNetworkInitialized();
+
   fFfmpegThread =
       spawn_thread(_FfmpegThreadEntry, "ffmpeg_stream", B_NORMAL_PRIORITY, this);
-  if (fFfmpegThread < 0)
+  if (fFfmpegThread < 0) {
+    fRunning = false;
+    fRequestRunning = false;
+    MaybeDeinitFfmpegNetwork();
     return B_ERROR;
+  }
   resume_thread(fFfmpegThread);
   return B_OK;
 }
@@ -1313,14 +1339,12 @@ int NetworkAudioStreamIO::_FfmpegInterruptCallback(void *arg) {
 void NetworkAudioStreamIO::_FfmpegLoop() {
   DEBUG_PRINT("FFmpeg stream loop started for %s\n", fUrl.String());
 
-  avformat_network_init();
-
   AVFormatContext *fmtCtx = avformat_alloc_context();
   if (!fmtCtx) {
     fRequestRunning = false;
     release_sem(fHlsFormatReady);
     release_sem(fDataReady);
-    avformat_network_deinit();
+    MaybeDeinitFfmpegNetwork();
     return;
   }
   fmtCtx->interrupt_callback.callback = _FfmpegInterruptCallback;
@@ -1344,6 +1368,7 @@ void NetworkAudioStreamIO::_FfmpegLoop() {
   av_dict_set(&opts, "reconnect_delay_max", "5", 0);
   av_dict_set(&opts, "rw_timeout", "15000000", 0);
 
+  DEBUG_PRINT("FFmpeg opening input: %s\n", fUrl.String());
   fFfmpegReadDeadline = system_time() + 15000000;
   if (avformat_open_input(&fmtCtx, fUrl.String(), nullptr, &opts) < 0) {
     DEBUG_PRINT("avformat_open_input failed for %s\n", fUrl.String());
@@ -1352,9 +1377,10 @@ void NetworkAudioStreamIO::_FfmpegLoop() {
     fRequestRunning = false;
     release_sem(fHlsFormatReady);
     release_sem(fDataReady);
-    avformat_network_deinit();
+    MaybeDeinitFfmpegNetwork();
     return;
   }
+  DEBUG_PRINT("FFmpeg input opened: %s\n", fUrl.String());
   fFfmpegReadDeadline = 0;
   av_dict_free(&opts);
 
@@ -1365,7 +1391,7 @@ void NetworkAudioStreamIO::_FfmpegLoop() {
     fRequestRunning = false;
     release_sem(fHlsFormatReady);
     release_sem(fDataReady);
-    avformat_network_deinit();
+    MaybeDeinitFfmpegNetwork();
     return;
   }
   fFfmpegReadDeadline = 0;
@@ -1382,7 +1408,7 @@ void NetworkAudioStreamIO::_FfmpegLoop() {
     fRequestRunning = false;
     release_sem(fHlsFormatReady);
     release_sem(fDataReady);
-    avformat_network_deinit();
+    MaybeDeinitFfmpegNetwork();
     return;
   }
 
@@ -1394,7 +1420,7 @@ void NetworkAudioStreamIO::_FfmpegLoop() {
     fRequestRunning = false;
     release_sem(fHlsFormatReady);
     release_sem(fDataReady);
-    avformat_network_deinit();
+    MaybeDeinitFfmpegNetwork();
     return;
   }
 
@@ -1404,7 +1430,7 @@ void NetworkAudioStreamIO::_FfmpegLoop() {
     fRequestRunning = false;
     release_sem(fHlsFormatReady);
     release_sem(fDataReady);
-    avformat_network_deinit();
+    MaybeDeinitFfmpegNetwork();
     return;
   }
 
@@ -1414,7 +1440,7 @@ void NetworkAudioStreamIO::_FfmpegLoop() {
     fRequestRunning = false;
     release_sem(fHlsFormatReady);
     release_sem(fDataReady);
-    avformat_network_deinit();
+    MaybeDeinitFfmpegNetwork();
     return;
   }
 
@@ -1425,7 +1451,7 @@ void NetworkAudioStreamIO::_FfmpegLoop() {
     fRequestRunning = false;
     release_sem(fHlsFormatReady);
     release_sem(fDataReady);
-    avformat_network_deinit();
+    MaybeDeinitFfmpegNetwork();
     return;
   }
 
@@ -1457,7 +1483,7 @@ void NetworkAudioStreamIO::_FfmpegLoop() {
     fRequestRunning = false;
     release_sem(fHlsFormatReady);
     release_sem(fDataReady);
-    avformat_network_deinit();
+    MaybeDeinitFfmpegNetwork();
     return;
   }
 
@@ -1493,7 +1519,7 @@ void NetworkAudioStreamIO::_FfmpegLoop() {
     avformat_close_input(&fmtCtx);
     fRequestRunning = false;
     release_sem(fDataReady);
-    avformat_network_deinit();
+    MaybeDeinitFfmpegNetwork();
     return;
   }
 
@@ -1699,7 +1725,7 @@ void NetworkAudioStreamIO::_FfmpegLoop() {
   fRequestRunning = false;
   fRunning = false;
   release_sem(fDataReady);
-  avformat_network_deinit();
+  MaybeDeinitFfmpegNetwork();
 
   DEBUG_PRINT("FFmpeg stream loop ended\n");
 }

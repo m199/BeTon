@@ -649,7 +649,11 @@ void RadioStationController::PlayLoop() {
     statusMsg.AddBool("isPermanent", true);
     fWindow->PostMessage(&statusMsg);
 
+#if B_HAIKU_VERSION <= B_HAIKU_VERSION_1_BETA_5
+    BUrl url(resolved.String());
+#else
     BUrl url(resolved.String(), false);
+#endif
     fWindow->fPlaybackEngine->PlayUrl(url, stationName.String());
 
     if (generation != fPlayGeneration.load(std::memory_order_relaxed) ||
