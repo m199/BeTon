@@ -25,6 +25,12 @@
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "MediaTableView"
 
+#if B_HAIKU_VERSION <= B_HAIKU_VERSION_1_BETA_5
+// Deprecated after Haiku R1/beta6: beta5 lacks AddRows(), so keep AddRow()
+// chunks small enough that large libraries do not block the UI in one burst.
+static constexpr size_t kBeta5RowBatchSize = 200;
+#endif
+
 /**
  * @brief Calculate row height based on font for HiDPI scaling.
  * @return The calculated row height with 40% padding.
@@ -798,7 +804,11 @@ void MediaTableView::AddEntries(std::vector<MediaItem> items) {
              itemCount, (long long)(t1 - t0),
              (long long)(t2 - t1), (int)fHasPendingSortRestore);
 
+#if B_HAIKU_VERSION <= B_HAIKU_VERSION_1_BETA_5
+  _AddBatch(kBeta5RowBatchSize);
+#else
   _AddBatch(fPendingItems.size());
+#endif
 }
 
 /**
@@ -1311,7 +1321,11 @@ void MediaTableView::MessageReceived(BMessage *msg) {
   }
 
   case kMsgChunkAdd:
-    _AddBatch(1000);
+#if B_HAIKU_VERSION <= B_HAIKU_VERSION_1_BETA_5
+    _AddBatch(kBeta5RowBatchSize);
+#else
+    _AddBatch(fPendingItems.size() - fPendingIndex);
+#endif
     break;
 
   case B_COLORS_UPDATED: {
