@@ -395,6 +395,8 @@ MainWindow::~MainWindow() {
   if (fRadioStationController)
     fRadioStationController->WaitForPlayThread();
 
+  _WaitForLaunchedThreads();
+
   SaveSettings();
   if (fPlaybackEngine) {
     fPlaybackEngine->Shutdown();
@@ -817,14 +819,37 @@ void MainWindow::MessageReceived(BMessage *msg) {
 thread_id MainWindow::LaunchThread(const char *name,
                                    std::function<void()> &&func) {
   auto *funcPtr = new std::function<void()>(std::move(func));
-  thread_id thread =
-      spawn_thread(_ThreadEntry, name, B_NORMAL_PRIORITY, funcPtr);
+
+  BAutolock lock(&fWorkerThreadsLock);
+  if (fShuttingDown.load(std::memory_order_relaxed)) {
+    delete funcPtr;
+    return B_NOT_ALLOWED;
+  }
+
+  thread_id thread = spawn_thread(_ThreadEntry, name, B_NORMAL_PRIORITY, funcPtr);
   if (thread >= 0) {
+    fWorkerThreads.push_back(thread);
     resume_thread(thread);
   } else {
     delete funcPtr;
   }
   return thread;
+}
+
+void MainWindow::_WaitForLaunchedThreads() {
+  std::vector<thread_id> threads;
+  {
+    BAutolock lock(&fWorkerThreadsLock);
+    threads.swap(fWorkerThreads);
+  }
+
+  thread_id current = find_thread(nullptr);
+  for (thread_id thread : threads) {
+    if (thread < 0 || thread == current)
+      continue;
+    status_t exit;
+    wait_for_thread(thread, &exit);
+  }
 }
 
 /**

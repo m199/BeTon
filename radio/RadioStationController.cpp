@@ -661,6 +661,14 @@ void RadioStationController::PlayLoop() {
       continue;
     }
 
+    if (!fWindow->fPlaybackEngine->IsPlaying()) {
+      BMessage failed(MSG_RADIO_CONNECTION_FAILED);
+      failed.AddString("url", stationUrl);
+      failed.AddString("name", stationName);
+      fWindow->PostMessage(&failed);
+      continue;
+    }
+
     BString nowPlaying;
     nowPlaying.SetToFormat(B_TRANSLATE("Now playing: %s"),
                            stationName.String());

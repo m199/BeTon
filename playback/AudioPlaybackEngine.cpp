@@ -267,6 +267,13 @@ void AudioPlaybackEngine::_CleanupMedia() {
     delete fPlayer;
     fPlayer = nullptr;
   }
+
+  bigtime_t callbackDeadline = system_time() + 500000;
+  while (fInCallback.load(std::memory_order_relaxed) &&
+         system_time() < callbackDeadline) {
+    snooze(1000);
+  }
+
   if (fTrack) {
     fMediaFile->ReleaseTrack(fTrack);
     fTrack = nullptr;
@@ -1024,6 +1031,7 @@ bool AudioPlaybackEngine::IsPlaying() const {
  * @brief Shuts down the controller, stopping playback and cleaning up.
  */
 void AudioPlaybackEngine::Shutdown() {
+  BAutolock lock(fPlayLock);
   fShuttingDown = true;
   fAtEnd = true;
   _StopTimeUpdates();

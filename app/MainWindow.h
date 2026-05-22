@@ -161,6 +161,7 @@ private:
   bool _HandleMetadataMessage(BMessage* msg);
   bool _HandleAppCommandMessage(BMessage* msg);
   bool _HandleLibraryDataMessage(BMessage* msg);
+  void _WaitForLaunchedThreads();
 
   void _HandleControlInvoked(BMessage* msg);
   void _ShowAboutWindow();
@@ -218,6 +219,8 @@ private:
   ///@{
   BString fLastSelectedPath;
   std::atomic<bool> fShuttingDown{false};
+  BLocker fWorkerThreadsLock;
+  std::vector<thread_id> fWorkerThreads;
 
   ///@}
 

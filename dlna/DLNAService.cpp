@@ -85,6 +85,7 @@ DLNAService::DLNAService(BMessenger target)
 
 DLNAService::~DLNAService()
 {
+    _StopPositionPolling();
     StopDiscovery();
     if (fDiscoveryWakeSem >= 0)
         delete_sem(fDiscoveryWakeSem);

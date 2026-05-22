@@ -226,6 +226,12 @@ PlaybackQueueManager::HandleTrackEnded()
       else
         fWindow->PostMessage(MSG_STOP);
     }
+  } else if (fActiveSource == SourceRadio &&
+             fWindow->fRadioStationController) {
+    BMessage failed(MSG_RADIO_CONNECTION_FAILED);
+    failed.AddString("url", fWindow->fRadioStationController->ActiveStationUrl());
+    failed.AddString("name", fWindow->fRadioStationController->ActiveStationName());
+    fWindow->PostMessage(&failed);
   }
 }
 
