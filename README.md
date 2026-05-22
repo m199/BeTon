@@ -12,10 +12,11 @@ A native music player for Haiku.
 ## Features
 
 *   Audio playback
+*   Internet Radio Playback
+*   DLNA Playback
 *   Playlist creation
 *   Reads and writes tags, with bfs attribute synchronization
 *   MusicBrainz metadata lookup
-*   Color support, just drop a color on the seekbar
 
 ## Development
 
@@ -30,7 +31,7 @@ A native music player for Haiku.
 Install via `pkgman`:
 
 ```bash
-pkgman install taglib_devel musicbrainz_devel ffmpeg6_devel or ffmpeg7_devel or ffmpeg8_devel
+pkgman install taglib_devel musicbrainz_devel ffmpeg8_devel
 ```
 
 ## Building
