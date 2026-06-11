@@ -190,12 +190,16 @@ public:
           if (mr) {
             if (colIdx == 11) {
               float xInCol = where.x - colLeft;
-              float starWidth = column->Width() / 5.0f;
+              float starWidth = be_plain_font->StringWidth("★");
+              float xInStars = xInCol - 8.0f; // 8px left margin in BStringColumn
               if (starWidth > 0.0f) {
-                int32 star = (int32)(xInCol / starWidth);
-                star = std::max((int32)0, std::min((int32)4, star));
-                float xInStar = xInCol - (starWidth * star);
-                int32 rating = star * 2 + (xInStar < starWidth / 2.0f ? 1 : 2);
+                int32 rating = 0;
+                if (xInStars >= 0.0f) {
+                  int32 star = (int32)(xInStars / starWidth);
+                  star = std::max((int32)0, std::min((int32)4, star));
+                  float xInStar = xInStars - (starWidth * star);
+                  rating = star * 2 + (xInStar < starWidth / 2.0f ? 1 : 2);
+                }
 
                 int32 currentRating = mr->Item().rating;
                 if (rating == currentRating) {
