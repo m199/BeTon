@@ -191,7 +191,7 @@ public:
             if (colIdx == 11) {
               float xInCol = where.x - colLeft;
               float starWidth = be_plain_font->StringWidth("★★★★★") / 5.0f;
-              float xInStars = xInCol - 8.0f; // 8px left margin in BStringColumn
+              float xInStars = xInCol - 16.0f; // 16px total margin (cell padding + BStringColumn margin)
               if (starWidth > 0.0f) {
                 int32 rating = 0;
                 if (xInStars >= 0.0f) {
