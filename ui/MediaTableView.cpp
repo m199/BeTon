@@ -188,6 +188,37 @@ public:
         if (column && row) {
           MediaRow *mr = dynamic_cast<MediaRow *>(row);
           if (mr) {
+            if (colIdx == 11) {
+              float xInCol = where.x - colLeft;
+              float starWidth = column->Width() / 5.0f;
+              if (starWidth > 0.0f) {
+                int32 star = (int32)(xInCol / starWidth);
+                star = std::max((int32)0, std::min((int32)4, star));
+                float xInStar = xInCol - (starWidth * star);
+                int32 rating = star * 2 + (xInStar < starWidth / 2.0f ? 1 : 2);
+
+                int32 currentRating = mr->Item().rating;
+                if (rating == currentRating) {
+                  rating = 0;
+                }
+
+                BMessage setRatingMsg(MSG_SET_RATING);
+                setRatingMsg.AddInt32("rating", rating);
+
+                BMessage filesMsg;
+                entry_ref ref;
+                if (get_ref_for_path(mr->Item().path.String(), &ref) == B_OK) {
+                  filesMsg.AddRef("refs", &ref);
+                }
+                setRatingMsg.AddMessage("files", &filesMsg);
+
+                if (fOwner->Window()) {
+                  fOwner->Window()->PostMessage(&setRatingMsg);
+                }
+                return B_SKIP_MESSAGE;
+              }
+            }
+
             BString path = mr->Item().path;
             bool isRemote = path.StartsWith("http://") || path.StartsWith("https://") || path.StartsWith("dlna://");
             if (!isRemote && fOwner->FieldNameForColumn(colIdx) != nullptr) {
