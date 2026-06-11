@@ -171,7 +171,7 @@ public:
         }
 
         BColumn *column = nullptr;
-        float colLeft = 0;
+        float colLeft = 16.0f;
         int32 colIdx = -1;
         for (int32 i = 0; i < fOwner->CountColumns(); ++i) {
           BColumn *c = fOwner->ColumnAt(i);
@@ -553,10 +553,19 @@ public:
   }
 
   void KeyDown(const char *bytes, int32 numBytes) override {
-    if (numBytes == 1 && bytes[0] == B_ESCAPE) {
-      BMessage msg(MediaTableView::MSG_CANCEL_EDIT);
-      fTarget.SendMessage(&msg);
-      return;
+    if (numBytes == 1) {
+      if (bytes[0] == B_ESCAPE) {
+        BMessage msg(MediaTableView::MSG_CANCEL_EDIT);
+        fTarget.SendMessage(&msg);
+        return;
+      }
+      if (bytes[0] == B_UP_ARROW || bytes[0] == B_DOWN_ARROW ||
+          bytes[0] == B_LEFT_ARROW || bytes[0] == B_RIGHT_ARROW) {
+        BMessage msg(MediaTableView::MSG_NAVIGATE_EDIT);
+        msg.AddInt32("key", bytes[0]);
+        fTarget.SendMessage(&msg);
+        return;
+      }
     }
     BTextControl::KeyDown(bytes, numBytes);
   }
@@ -1442,6 +1451,14 @@ void MediaTableView::MessageReceived(BMessage *msg) {
     break;
   }
 
+  case MSG_NAVIGATE_EDIT: {
+    int32 key = 0;
+    if (msg->FindInt32("key", &key) == B_OK) {
+      _NavigateCellEdit(key);
+    }
+    break;
+  }
+
   default:
     BColumnListView::MessageReceived(msg);
   }
@@ -1869,5 +1886,71 @@ const char *MediaTableView::FieldNameForColumn(int32 colIdx) const {
     case 7: return "track";
     case 8: return "disc";
     default: return nullptr;
+  }
+}
+
+void MediaTableView::_NavigateCellEdit(int32 key) {
+  if (!fActiveEditor || !fEditingRow || fEditingColIdx < 0 || !fEditingOutlineView)
+    return;
+
+  BRow *curRow = fEditingRow;
+  int32 curColIdx = fEditingColIdx;
+  BView *targetView = fEditingOutlineView;
+
+  CommitCellEdit();
+
+  BRow *targetRow = nullptr;
+  int32 targetColIdx = -1;
+
+  if (key == B_UP_ARROW || key == B_DOWN_ARROW) {
+    int32 curRowIdx = IndexOf(curRow);
+    if (curRowIdx >= 0) {
+      int32 dir = (key == B_UP_ARROW) ? -1 : 1;
+      int32 nextRowIdx = curRowIdx + dir;
+      while (nextRowIdx >= 0 && nextRowIdx < CountRows()) {
+        BRow *r = RowAt(nextRowIdx);
+        MediaRow *mr = dynamic_cast<MediaRow *>(r);
+        if (mr) {
+          BString path = mr->Item().path;
+          bool isRemote = path.StartsWith("http://") || path.StartsWith("https://") || path.StartsWith("dlna://");
+          if (!isRemote) {
+            targetRow = r;
+            break;
+          }
+        }
+        nextRowIdx += dir;
+      }
+    }
+    if (targetRow) {
+      targetColIdx = curColIdx;
+    }
+  } else if (key == B_LEFT_ARROW || key == B_RIGHT_ARROW) {
+    targetRow = curRow;
+    int32 dir = (key == B_LEFT_ARROW) ? -1 : 1;
+    int32 nextColIdx = curColIdx + dir;
+    while (nextColIdx >= 0 && nextColIdx < CountColumns()) {
+      BColumn *col = ColumnAt(nextColIdx);
+      if (col && col->IsVisible() && FieldNameForColumn(nextColIdx) != nullptr) {
+        targetColIdx = nextColIdx;
+        break;
+      }
+      nextColIdx += dir;
+    }
+  }
+
+  if (targetRow && targetColIdx >= 0) {
+    DeselectAll();
+    AddToSelection(targetRow);
+    ScrollTo(targetRow);
+
+    float colLeft = 16.0f;
+    for (int32 i = 0; i < targetColIdx; ++i) {
+      BColumn *c = ColumnAt(i);
+      if (c && c->IsVisible()) {
+        colLeft += c->Width();
+      }
+    }
+
+    StartCellEdit(targetRow, ColumnAt(targetColIdx), targetColIdx, colLeft, targetView);
   }
 }

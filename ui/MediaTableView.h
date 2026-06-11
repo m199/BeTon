@@ -89,6 +89,10 @@ public:
 
   static constexpr uint32 MSG_COMMIT_EDIT = 'cmed';
   static constexpr uint32 MSG_CANCEL_EDIT = 'cned';
+  static constexpr uint32 MSG_NAVIGATE_EDIT = 'nved';
+
+  bool HasActiveEditor() const { return fActiveEditor != nullptr; }
+  CellTextControl* ActiveEditor() const { return fActiveEditor; }
 
   void SaveState(BMessage *msg);
   void LoadState(BMessage *msg);
@@ -175,6 +179,7 @@ private:
   BColumn *fEditingColumn{nullptr};
   int32 fEditingColIdx{-1};
   BView *fEditingOutlineView{nullptr};
+  void _NavigateCellEdit(int32 key);
   ///@}
 };
 

@@ -86,6 +86,7 @@ public:
   virtual ~MainWindow();
 
   void MessageReceived(BMessage *msg) override;
+  void WindowActivated(bool active) override;
 
   /** @name Helpers used by child windows/components */
   ///@{

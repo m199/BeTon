@@ -285,6 +285,38 @@ MainWindow *gMainWindow = nullptr;
 
 extern void AddItemToPlaylist(const BString &playlist, const BString &path);
 
+class WindowClickFilter : public BMessageFilter {
+public:
+  explicit WindowClickFilter(MainWindow *window)
+      : BMessageFilter(B_ANY_DELIVERY, B_ANY_SOURCE, B_MOUSE_DOWN),
+        fWindow(window) {}
+
+  filter_result Filter(BMessage *msg, BHandler **target) override {
+    if (fWindow && msg->what == B_MOUSE_DOWN) {
+      if (fWindow->fLibraryManager && fWindow->fLibraryManager->ContentView()) {
+        MediaTableView *view = fWindow->fLibraryManager->ContentView();
+        if (view->HasActiveEditor()) {
+          BView *v = dynamic_cast<BView *>(*target);
+          bool clickOnEditor = false;
+          for (BView *p = v; p; p = p->Parent()) {
+            if (p == view->ActiveEditor()) {
+              clickOnEditor = true;
+              break;
+            }
+          }
+          if (!clickOnEditor) {
+            view->CommitCellEdit();
+          }
+        }
+      }
+    }
+    return B_DISPATCH_MESSAGE;
+  }
+
+private:
+  MainWindow *fWindow;
+};
+
 /**
  * @brief Constructs the Main Window of the application.
  *
@@ -377,6 +409,8 @@ MainWindow::MainWindow()
     fDlnaController->RebuildRendererMenu();
   fLocalServer.Start();
 #endif
+
+  AddCommonFilter(new WindowClickFilter(this));
 }
 
 /**
@@ -762,6 +796,15 @@ void MainWindow::_BuildUI() {
       .AddGlue()
       .End()
       .End();
+}
+
+void MainWindow::WindowActivated(bool active) {
+  BWindow::WindowActivated(active);
+  if (!active) {
+    if (fLibraryManager && fLibraryManager->ContentView()) {
+      fLibraryManager->ContentView()->CommitCellEdit();
+    }
+  }
 }
 
 /**
