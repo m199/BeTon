@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+class CellTextControl;
+
 /**
  * @class MediaTableView
  * @brief The main list view displaying the audio library.
@@ -79,6 +81,11 @@ public:
    * @param mi The updated media item.
    */
   void UpdateItem(const MediaItem &mi);
+
+  void StartCellEdit(BRow *row, BColumn *column, int32 colIdx, float colLeft, BView *targetView);
+  void CommitCellEdit();
+  void CancelCellEdit();
+  const char *FieldNameForColumn(int32 colIdx) const;
 
   void SaveState(BMessage *msg);
   void LoadState(BMessage *msg);
@@ -156,6 +163,17 @@ private:
   bool fIsRadioMode{false};
   bool fIsPlaylistMode{false};
   std::vector<std::pair<int32, BColumn*>> fHiddenColumns; ///< Columns removed in radio mode
+  ///@}
+
+  /** @name Cell Inline Editing */
+  ///@{
+  CellTextControl *fActiveEditor{nullptr};
+  BRow *fEditingRow{nullptr};
+  BColumn *fEditingColumn{nullptr};
+  int32 fEditingColIdx{-1};
+  BView *fEditingOutlineView{nullptr};
+  static constexpr uint32 MSG_COMMIT_EDIT = 'cmed';
+  static constexpr uint32 MSG_CANCEL_EDIT = 'cned';
   ///@}
 };
 

@@ -17,6 +17,8 @@
 #include <PopUpMenu.h>
 #include <View.h>
 #include <Window.h>
+#include <TextControl.h>
+#include <TextView.h>
 #include <algorithm>
 #include <cinttypes>
 #include <memory>
@@ -166,6 +168,33 @@ public:
 
           snooze(10000);
           v->GetMouse(&p, &btns);
+        }
+
+        BColumn *column = nullptr;
+        float colLeft = 0;
+        int32 colIdx = -1;
+        for (int32 i = 0; i < fOwner->CountColumns(); ++i) {
+          BColumn *c = fOwner->ColumnAt(i);
+          if (!c->IsVisible())
+            continue;
+          if (where.x >= colLeft && where.x < colLeft + c->Width()) {
+            column = c;
+            colIdx = i;
+            break;
+          }
+          colLeft += c->Width();
+        }
+
+        if (column && row) {
+          MediaRow *mr = dynamic_cast<MediaRow *>(row);
+          if (mr) {
+            BString path = mr->Item().path;
+            bool isRemote = path.StartsWith("http://") || path.StartsWith("https://") || path.StartsWith("dlna://");
+            if (!isRemote && fOwner->FieldNameForColumn(colIdx) != nullptr) {
+              fOwner->StartCellEdit(row, column, colIdx, colLeft, v);
+              return B_SKIP_MESSAGE;
+            }
+          }
         }
       }
     }
@@ -505,6 +534,35 @@ public:
 
 private:
   BString fTitle;
+};
+
+class CellTextControl : public BTextControl {
+public:
+  CellTextControl(BRect frame, const char *name, const char *text, BMessage *message, BMessenger target)
+      : BTextControl(frame, name, nullptr, text, message), fTarget(target) {
+    SetFlags(Flags() | B_NAVIGABLE);
+  }
+
+  void MakeFocus(bool focused) override {
+    BTextControl::MakeFocus(focused);
+    if (!focused) {
+      BMessage msg(MediaTableView::MSG_COMMIT_EDIT);
+      msg.AddBool("focus_loss", true);
+      fTarget.SendMessage(&msg);
+    }
+  }
+
+  void KeyDown(const char *bytes, int32 numBytes) override {
+    if (numBytes == 1 && bytes[0] == B_ESCAPE) {
+      BMessage msg(MediaTableView::MSG_CANCEL_EDIT);
+      fTarget.SendMessage(&msg);
+      return;
+    }
+    BTextControl::KeyDown(bytes, numBytes);
+  }
+
+private:
+  BMessenger fTarget;
 };
 
 /**
@@ -1374,6 +1432,16 @@ void MediaTableView::MessageReceived(BMessage *msg) {
     break;
   }
 
+  case MSG_COMMIT_EDIT: {
+    CommitCellEdit();
+    break;
+  }
+
+  case MSG_CANCEL_EDIT: {
+    CancelCellEdit();
+    break;
+  }
+
   default:
     BColumnListView::MessageReceived(msg);
   }
@@ -1692,4 +1760,114 @@ void MediaTableView::_ApplyPendingSortRestore() {
   }
 
   fPendingSortRestore.MakeEmpty();
+}
+
+void MediaTableView::StartCellEdit(BRow *row, BColumn *column, int32 colIdx, float colLeft, BView *targetView) {
+  CommitCellEdit();
+
+  if (!row || !column || !targetView)
+    return;
+
+  BRect rowRect;
+  if (!GetRowRect(row, &rowRect))
+    return;
+
+  BRect cellRect(colLeft, rowRect.top, colLeft + column->Width(), rowRect.bottom);
+
+  BField *field = row->GetField(colIdx);
+  BString initialText;
+  if (auto *sf = dynamic_cast<BStringField *>(field)) {
+    initialText = sf->String();
+  } else if (auto *ifld = dynamic_cast<BIntegerField *>(field)) {
+    initialText << ifld->Value();
+  }
+
+  BRect editRect = cellRect;
+  editRect.InsetBy(1, 1);
+
+  CellTextControl *editor = new CellTextControl(editRect, "cell_editor", initialText.String(),
+                                                new BMessage(MSG_COMMIT_EDIT), BMessenger(this));
+  editor->SetTarget(this);
+
+  targetView->AddChild(editor);
+  
+  fActiveEditor = editor;
+  fEditingRow = row;
+  fEditingColumn = column;
+  fEditingColIdx = colIdx;
+  fEditingOutlineView = targetView;
+
+  editor->MakeFocus(true);
+  if (editor->TextView()) {
+    editor->TextView()->SelectAll();
+  }
+}
+
+void MediaTableView::CommitCellEdit() {
+  if (!fActiveEditor)
+    return;
+
+  CellTextControl *editor = fActiveEditor;
+  fActiveEditor = nullptr;
+
+  BString newText = editor->Text();
+
+  if (editor->Parent()) {
+    editor->Parent()->RemoveChild(editor);
+  }
+  delete editor;
+
+  if (fEditingRow) {
+    MediaRow *mr = dynamic_cast<MediaRow *>(fEditingRow);
+    if (mr) {
+      BString path = mr->Item().path;
+      const char *fieldName = FieldNameForColumn(fEditingColIdx);
+      if (fieldName && !path.IsEmpty()) {
+        BMessage saveMsg(MSG_PROP_SAVE);
+        saveMsg.AddString("file", path);
+        saveMsg.AddString(fieldName, newText);
+
+        if (Window()) {
+          Window()->PostMessage(&saveMsg);
+        }
+      }
+    }
+  }
+
+  fEditingRow = nullptr;
+  fEditingColumn = nullptr;
+  fEditingColIdx = -1;
+  fEditingOutlineView = nullptr;
+}
+
+void MediaTableView::CancelCellEdit() {
+  if (!fActiveEditor)
+    return;
+
+  CellTextControl *editor = fActiveEditor;
+  fActiveEditor = nullptr;
+
+  if (editor->Parent()) {
+    editor->Parent()->RemoveChild(editor);
+  }
+  delete editor;
+
+  fEditingRow = nullptr;
+  fEditingColumn = nullptr;
+  fEditingColIdx = -1;
+  fEditingOutlineView = nullptr;
+}
+
+const char *MediaTableView::FieldNameForColumn(int32 colIdx) const {
+  switch (colIdx) {
+    case 0: return "title";
+    case 1: return "artist";
+    case 2: return "album";
+    case 3: return "albumArtist";
+    case 4: return "genre";
+    case 5: return "year";
+    case 7: return "track";
+    case 8: return "disc";
+    default: return nullptr;
+  }
 }
