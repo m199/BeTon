@@ -190,7 +190,7 @@ public:
           if (mr) {
             if (colIdx == 11) {
               float xInCol = where.x - colLeft;
-              float starWidth = be_plain_font->StringWidth("★");
+              float starWidth = be_plain_font->StringWidth("★★★★★") / 5.0f;
               float xInStars = xInCol - 8.0f; // 8px left margin in BStringColumn
               if (starWidth > 0.0f) {
                 int32 rating = 0;
@@ -205,6 +205,9 @@ public:
                 if (rating == currentRating) {
                   rating = 0;
                 }
+
+                DEBUG_PRINT("Rating click: xInCol=%.1f, xInStars=%.1f, starWidth=%.1f, rating=%d\n",
+                            xInCol, xInStars, starWidth, (int)rating);
 
                 BMessage setRatingMsg(MSG_SET_RATING);
                 setRatingMsg.AddInt32("rating", rating);
