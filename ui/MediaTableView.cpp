@@ -179,7 +179,7 @@ public:
             continue;
           if (where.x >= colLeft && where.x < colLeft + c->Width()) {
             column = c;
-            colIdx = i;
+            colIdx = c->LogicalFieldNum();
             break;
           }
           colLeft += c->Width();
