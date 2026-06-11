@@ -92,7 +92,7 @@ public:
   static constexpr uint32 MSG_NAVIGATE_EDIT = 'nved';
 
   bool HasActiveEditor() const { return fActiveEditor != nullptr; }
-  CellTextControl* ActiveEditor() const { return fActiveEditor; }
+  BView* ActiveEditor() const;
 
   void SaveState(BMessage *msg);
   void LoadState(BMessage *msg);

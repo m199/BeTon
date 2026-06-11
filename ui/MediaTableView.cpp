@@ -1954,3 +1954,7 @@ void MediaTableView::_NavigateCellEdit(int32 key) {
     StartCellEdit(targetRow, ColumnAt(targetColIdx), targetColIdx, colLeft, targetView);
   }
 }
+
+BView* MediaTableView::ActiveEditor() const {
+  return fActiveEditor;
+}

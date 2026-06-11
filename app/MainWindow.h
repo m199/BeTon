@@ -126,6 +126,7 @@ public:
   ///@}
 
 private:
+  friend class WindowClickFilter;
   friend class ArtworkController;
   friend class DLNAMessageHandler;
   friend class DLNAViewController;
