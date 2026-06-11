@@ -32,3 +32,11 @@ This file documents critical compiler gotchas, private access workarounds, and t
           return fActiveEditor; // Compiler implicitly upcasts CellTextControl* to BView*
         }
         ```
+
+## 3. Inline Cell Editing with Reordered Columns
+*   **Problem**: In `RightClickFilter::Filter`, when identifying which column was clicked, the code used the loop's visual position index (`i`) to retrieve and edit the field.
+*   If columns are reordered visually (via custom display order in the constructor or by user header dragging), the visual index `i` no longer corresponds to the column's original logical field mapping (`logicalFieldNum`). Clicking a column would trigger editing on the wrong field or cause errors.
+*   **Solution**: Use the column's persistent logical field number mapping instead:
+    ```cpp
+    colIdx = c->LogicalFieldNum();
+    ```
