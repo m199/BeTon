@@ -87,6 +87,9 @@ public:
   void CancelCellEdit();
   const char *FieldNameForColumn(int32 colIdx) const;
 
+  static constexpr uint32 MSG_COMMIT_EDIT = 'cmed';
+  static constexpr uint32 MSG_CANCEL_EDIT = 'cned';
+
   void SaveState(BMessage *msg);
   void LoadState(BMessage *msg);
   
@@ -172,8 +175,6 @@ private:
   BColumn *fEditingColumn{nullptr};
   int32 fEditingColIdx{-1};
   BView *fEditingOutlineView{nullptr};
-  static constexpr uint32 MSG_COMMIT_EDIT = 'cmed';
-  static constexpr uint32 MSG_CANCEL_EDIT = 'cned';
   ///@}
 };
 
