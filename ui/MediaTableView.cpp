@@ -1586,7 +1586,7 @@ void MediaTableView::SaveState(BMessage *msg) {
   if (!msg)
     return;
 
-  msg->RemoveName("col_index");
+  msg->RemoveName("col_name");
   msg->RemoveName("col_width");
   msg->RemoveName("col_visible");
 
