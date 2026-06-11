@@ -2,6 +2,7 @@
 #include "MediaTableView.h"
 #include "MainWindow.h"
 #include "Messages.h"
+#include <ScrollBar.h>
 #include "MusicSourceSettings.h"
 #include "MetadataTagIO.h"
 #include <Catalog.h>
@@ -88,6 +89,27 @@ public:
     BView *v = dynamic_cast<BView *>(*target);
     if (!v)
       return B_DISPATCH_MESSAGE;
+
+    // Exclude scrollbars
+    if (dynamic_cast<BScrollBar *>(v) != nullptr)
+      return B_DISPATCH_MESSAGE;
+
+    // Exclude the column header view
+    if (v->Name() && strcmp(v->Name(), "header") == 0)
+      return B_DISPATCH_MESSAGE;
+
+    // Exclude active editor or its children
+    if (fOwner->HasActiveEditor()) {
+      bool clickOnEditor = false;
+      for (BView *p = v; p; p = p->Parent()) {
+        if (p == fOwner->ActiveEditor()) {
+          clickOnEditor = true;
+          break;
+        }
+      }
+      if (clickOnEditor)
+        return B_DISPATCH_MESSAGE;
+    }
 
     bool inside = false;
     for (BView *p = v; p; p = p->Parent()) {
