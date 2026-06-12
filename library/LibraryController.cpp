@@ -12,10 +12,14 @@
 #include <Catalog.h>
 #include <MessageRunner.h>
 #include <Entry.h>
+#include <Messenger.h>
+#include <OS.h>
 #include <Path.h>
 #include <Roster.h>
 #include <algorithm>
+#include <map>
 #include <set>
+#include <vector>
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "LibraryController"
@@ -404,8 +408,77 @@ void LibraryController::RebuildPathIndex() {
   }
 }
 
+struct TrackerRevealEntry {
+  entry_ref fileRef;
+  BString   dirPath;
+};
+
+// Runs in a detached thread: waits for Tracker windows to settle, then
+// walks the Tracker scripting hierarchy to find each parent directory
+// window and sets its Selection property to the corresponding file.
+static int32 _TrackerSelectThread(void *data) {
+  auto *entries = static_cast<std::vector<TrackerRevealEntry> *>(data);
+
+  snooze(400000); // 400 ms — enough for a new Tracker window to appear
+
+  BMessenger tracker("application/x-vnd.Be-TRAK");
+  if (!tracker.IsValid()) {
+    delete entries;
+    return B_OK;
+  }
+
+  BMessage countMsg(B_COUNT_PROPERTIES);
+  countMsg.AddSpecifier("Window");
+  BMessage countReply;
+  if (tracker.SendMessage(&countMsg, &countReply, 0, 2000000) != B_OK) {
+    delete entries;
+    return B_OK;
+  }
+  int32 windowCount = 0;
+  countReply.FindInt32("result", &windowCount);
+
+  // Gather refs per window index to batch into one B_SET_PROPERTY each.
+  std::map<int32, std::vector<entry_ref>> windowSelections;
+
+  for (auto &e : *entries) {
+    for (int32 i = 0; i < windowCount; ++i) {
+      BMessage pathMsg(B_GET_PROPERTY);
+      pathMsg.AddSpecifier("Path");
+      pathMsg.AddSpecifier("Poses");
+      pathMsg.AddSpecifier("Window", i);
+
+      BMessage pathReply;
+      if (tracker.SendMessage(&pathMsg, &pathReply, 0, 500000) != B_OK)
+        continue;
+
+      BString wPath;
+      if (pathReply.FindString("result", &wPath) != B_OK)
+        continue;
+
+      if (wPath == e.dirPath) {
+        windowSelections[i].push_back(e.fileRef);
+        break;
+      }
+    }
+  }
+
+  for (auto &[winIdx, fileRefs] : windowSelections) {
+    BMessage sel(B_SET_PROPERTY);
+    sel.AddSpecifier("Selection");
+    sel.AddSpecifier("Poses");
+    sel.AddSpecifier("Window", winIdx);
+    for (auto &ref : fileRefs)
+      sel.AddRef("data", &ref);
+    tracker.SendMessage(&sel);
+  }
+
+  delete entries;
+  return B_OK;
+}
+
 /**
- * @brief Opens parent directories of provided refs in Tracker.
+ * @brief Opens parent directories of provided refs in Tracker and selects
+ *        the files within those windows.
  */
 void LibraryController::RevealInTracker(BMessage *msg) {
   std::vector<entry_ref> refs;
@@ -422,9 +495,11 @@ void LibraryController::RevealInTracker(BMessage *msg) {
   if (refs.empty())
     return;
 
+  auto *threadEntries = new std::vector<TrackerRevealEntry>();
   std::set<BString> openedDirs;
-  for (const auto &r : refs) {
-    BEntry e(&r, true);
+
+  for (const auto &fileRef : refs) {
+    BEntry e(&fileRef, true);
     BPath filePath;
     if (e.GetPath(&filePath) != B_OK)
       continue;
@@ -433,18 +508,29 @@ void LibraryController::RevealInTracker(BMessage *msg) {
     if (dirPath.GetParent(&dirPath) != B_OK)
       continue;
 
-    BString d = dirPath.Path();
-    if (openedDirs.insert(d).second) {
+    BString dirStr = dirPath.Path();
+    if (openedDirs.insert(dirStr).second) {
       entry_ref dirRef;
-      if (get_ref_for_path(d.String(), &dirRef) == B_OK) {
+      if (get_ref_for_path(dirStr.String(), &dirRef) == B_OK) {
         BRoster roster;
         status_t st = roster.Launch(&dirRef);
         if (st != B_OK && st != B_ALREADY_RUNNING) {
-          DEBUG_PRINT("Tracker Launch dir failed: %s\n",
-                      strerror(st));
+          DEBUG_PRINT("Tracker Launch dir failed: %s\n", strerror(st));
         }
       }
     }
+
+    TrackerRevealEntry entry;
+    entry.fileRef = fileRef;
+    entry.dirPath = dirStr;
+    threadEntries->push_back(entry);
   }
+
+  thread_id tid = spawn_thread(_TrackerSelectThread, "tracker_reveal",
+                               B_NORMAL_PRIORITY, threadEntries);
+  if (tid >= 0)
+    resume_thread(tid);
+  else
+    delete threadEntries;
 }
 
