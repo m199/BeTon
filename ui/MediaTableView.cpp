@@ -1198,13 +1198,6 @@ void MediaTableView::KeyDown(const char *bytes, int32 numBytes) {
     if (currentMsg)
       currentMsg->FindInt32("modifiers", (int32 *)&modifiers);
 
-    if ((modifiers & B_COMMAND_KEY) && (bytes[0] == 'a' || bytes[0] == 'A')) {
-      for (int32 i = 0; i < CountRows(); ++i)
-        if (BRow *row = RowAt(i))
-          AddToSelection(row);
-      return;
-    }
-
     if (modifiers & B_OPTION_KEY) {
       if (bytes[0] == B_UP_ARROW) {
         BMessage msg(MSG_MOVE_UP);
@@ -1255,12 +1248,14 @@ void MediaTableView::AttachedToWindow() {
     outline->AddFilter(new DropFilter(this));
     outline->SetViewColor(B_TRANSPARENT_COLOR);
   }
+  Window()->AddShortcut('a', B_COMMAND_KEY, new BMessage(kMsgSelectAll), this);
 }
 
 /**
  * @brief Called when the view is detached from a window.
  */
 void MediaTableView::DetachedFromWindow() {
+  Window()->RemoveShortcut('a', B_COMMAND_KEY);
   BColumnListView::DetachedFromWindow();
 }
 
@@ -1528,6 +1523,13 @@ void MediaTableView::MessageReceived(BMessage *msg) {
 
   case MSG_CANCEL_EDIT: {
     CancelCellEdit();
+    break;
+  }
+
+  case kMsgSelectAll: {
+    for (int32 i = 0; i < CountRows(); ++i)
+      if (BRow *row = RowAt(i))
+        AddToSelection(row);
     break;
   }
 
