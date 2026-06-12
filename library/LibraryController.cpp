@@ -113,12 +113,35 @@ void LibraryController::HandleFileMove(BMessage *msg) {
   if (cv && cv->NowPlayingPath() == from)
     cv->SetNowPlayingPath(newPath);
 
+  if (fWindow->fLibraryManager)
+    fWindow->fLibraryManager->RenameActivePath(from, newPath);
+
   // Rekey the persistent cache entry.
   if (fWindow->fMediaLibraryCache) {
     BMessage moved(MSG_FILE_MOVED);
     moved.AddString("from", from);
     moved.AddString("to", newPath);
     fWindow->fMediaLibraryCache->PostMessage(&moved);
+  }
+
+  // Rewrite saved playlists that reference the old path.
+  if (fWindow->fPlaylistLibrary) {
+    BMessage names;
+    fWindow->fPlaylistLibrary->GetPlaylistNames(names, true);
+    BString plName;
+    for (int32 i = 0; names.FindString("name", i, &plName) == B_OK; ++i) {
+      std::vector<BString> paths =
+          fWindow->fPlaylistLibrary->LoadPlaylist(plName);
+      bool changed = false;
+      for (auto &p : paths) {
+        if (p == from) {
+          p = newPath;
+          changed = true;
+        }
+      }
+      if (changed)
+        fWindow->fPlaylistLibrary->SavePlaylist(plName, paths);
+    }
   }
 
   BString status(B_TRANSLATE("Moved to "));

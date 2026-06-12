@@ -192,6 +192,7 @@ private:
   BColumn *fEditingColumn{nullptr};
   int32 fEditingColIdx{-1};
   BView *fEditingOutlineView{nullptr};
+  BString fEditingPathPrefix; ///< Volume mount point hidden from the path editor
   ///@}
 };
 

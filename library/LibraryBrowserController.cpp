@@ -172,6 +172,16 @@ void LibraryBrowserController::SetActiveItems(const std::vector<MediaItem> &item
     fActivePaths.push_back(it.path);
 }
 
+void LibraryBrowserController::RenameActivePath(const BString &from,
+                                                const BString &to) {
+  for (auto &p : fActivePaths)
+    if (p == from)
+      p = to;
+  for (auto &it : fActiveItems)
+    if (it.path == from)
+      it.path = to;
+}
+
 /**
  * @brief Returns selected display text from a filter view.
  */

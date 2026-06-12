@@ -6,8 +6,10 @@
 #include "MusicSourceSettings.h"
 #include "MetadataTagIO.h"
 #include <Catalog.h>
+#include <Directory.h>
 #include <Entry.h>
 #include <Font.h>
+#include <Volume.h>
 #include <Handler.h>
 #include <Looper.h>
 #include <MenuItem.h>
@@ -1941,6 +1943,31 @@ void MediaTableView::StartCellEdit(BRow *row, BColumn *column, int32 colIdx, flo
     initialText << ifld->Value();
   }
 
+  fEditingPathPrefix = "";
+  if (colIdx == 10) {
+    // Path edits are restricted to the file's volume: hide the mount
+    // point from the editor and re-prepend it on commit.
+    BEntry fileEntry(initialText.String());
+    entry_ref ref;
+    if (fileEntry.InitCheck() == B_OK && fileEntry.GetRef(&ref) == B_OK) {
+      BVolume volume(ref.device);
+      BDirectory rootDir;
+      if (volume.InitCheck() == B_OK &&
+          volume.GetRootDirectory(&rootDir) == B_OK) {
+        BEntry rootEntry;
+        BPath rootPath;
+        if (rootDir.GetEntry(&rootEntry) == B_OK &&
+            rootEntry.GetPath(&rootPath) == B_OK) {
+          BString mount = rootPath.Path();
+          if (mount != "/" && initialText.StartsWith(mount)) {
+            fEditingPathPrefix = mount;
+            initialText.Remove(0, mount.Length());
+          }
+        }
+      }
+    }
+  }
+
   BRect editRect = cellRect;
   editRect.InsetBy(1, 1);
 
@@ -1984,10 +2011,16 @@ void MediaTableView::CommitCellEdit() {
       if (fieldName && !path.IsEmpty()) {
         if (fEditingColIdx == 10) {
           // Path edits move the file on disk instead of writing tags.
-          if (!newText.IsEmpty() && newText != path) {
+          BString newPath = newText;
+          if (!newPath.IsEmpty() && !fEditingPathPrefix.IsEmpty()) {
+            if (!newPath.StartsWith("/"))
+              newPath.Prepend("/");
+            newPath.Prepend(fEditingPathPrefix);
+          }
+          if (!newText.IsEmpty() && newPath != path) {
             BMessage moveMsg(MSG_FILE_MOVE);
             moveMsg.AddString("from", path);
-            moveMsg.AddString("to", newText);
+            moveMsg.AddString("to", newPath);
             if (Window())
               Window()->PostMessage(&moveMsg);
           }
@@ -2008,6 +2041,7 @@ void MediaTableView::CommitCellEdit() {
   fEditingColumn = nullptr;
   fEditingColIdx = -1;
   fEditingOutlineView = nullptr;
+  fEditingPathPrefix = "";
 }
 
 void MediaTableView::CancelCellEdit() {
@@ -2026,6 +2060,7 @@ void MediaTableView::CancelCellEdit() {
   fEditingColumn = nullptr;
   fEditingColIdx = -1;
   fEditingOutlineView = nullptr;
+  fEditingPathPrefix = "";
 }
 
 const char *MediaTableView::FieldNameForColumn(int32 colIdx) const {
