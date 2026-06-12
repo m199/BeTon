@@ -267,7 +267,7 @@ private:
   BMenuItem *fTooltipsOnItem = nullptr;
   BMenuItem *fTooltipsOffItem = nullptr;
 
-  bool fFastEditEnabled = true;
+  bool fFastEditEnabled = false;
   BMenuItem *fFastEditItem = nullptr;
 
   bool fRadioEnabled = false;

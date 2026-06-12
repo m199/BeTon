@@ -184,7 +184,7 @@ private:
 
   /** @name Cell Inline Editing */
   ///@{
-  bool fFastEditEnabled{true};
+  bool fFastEditEnabled{false};
   CellTextControl *fActiveEditor{nullptr};
   BRow *fEditingRow{nullptr};
   BColumn *fEditingColumn{nullptr};
