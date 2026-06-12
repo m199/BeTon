@@ -174,7 +174,6 @@ void ViewStateController::SetFastEditEnabled(bool enabled) {
       cv->CommitCellEdit();
     cv->SetFastEditEnabled(enabled);
   }
-  fWindow->SaveSettings();
 }
 
 void ViewStateController::UpdateTooltips() {
