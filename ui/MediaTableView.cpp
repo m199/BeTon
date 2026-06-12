@@ -208,7 +208,7 @@ public:
           colLeft += c->Width();
         }
 
-        if (column && row) {
+        if (column && row && fOwner->fFastEditEnabled) {
           MediaRow *mr = dynamic_cast<MediaRow *>(row);
           if (mr) {
             if (colIdx == 11) {

@@ -603,6 +603,11 @@ void MainWindow::_BuildUI() {
   tooltipsMenu->AddItem(fTooltipsOffItem);
   fSettingsMenu->AddItem(tooltipsMenu);
 
+  fFastEditItem = new BMenuItem(B_TRANSLATE("Enable Fast Edit"),
+                                new BMessage(MSG_TOGGLE_FAST_EDIT));
+  fFastEditItem->SetMarked(fFastEditEnabled);
+  fSettingsMenu->AddItem(fFastEditItem);
+
   fMenuBar->AddItem(fSettingsMenu);
 
   BMenu *helpMenu = new BMenu(B_TRANSLATE("Help"));

@@ -19,6 +19,7 @@ public:
   void UseSeekBarSelectionColor();
   void SetTooltipsEnabled(bool enabled);
   void UpdateTooltips();
+  void SetFastEditEnabled(bool enabled);
   void ToggleFilters();
   void HandleColorsUpdated();
   void HandleContentSelectionChanged();

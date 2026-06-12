@@ -163,6 +163,20 @@ void ViewStateController::SetTooltipsEnabled(bool enabled) {
   fWindow->SaveSettings();
 }
 
+void ViewStateController::SetFastEditEnabled(bool enabled) {
+  fWindow->fFastEditEnabled = enabled;
+  if (fWindow->fFastEditItem)
+    fWindow->fFastEditItem->SetMarked(enabled);
+
+  if (fWindow->fLibraryManager && fWindow->fLibraryManager->ContentView()) {
+    MediaTableView *cv = fWindow->fLibraryManager->ContentView();
+    if (!enabled)
+      cv->CommitCellEdit();
+    cv->SetFastEditEnabled(enabled);
+  }
+  fWindow->SaveSettings();
+}
+
 void ViewStateController::UpdateTooltips() {
   if (!fWindow->fShowTooltips) {
     if (fWindow->fBtnPrev) fWindow->fBtnPrev->SetToolTip((BToolTip*)nullptr);

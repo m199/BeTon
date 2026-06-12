@@ -77,6 +77,7 @@
 #define MSG_SELECTION_COLOR_MATCH 'scmt'  ///< Match selection to SeekBar color.
 #define MSG_TOOLTIPS_ON 'tton'            ///< Enable tooltips.
 #define MSG_TOOLTIPS_OFF 'ttof'           ///< Disable tooltips.
+#define MSG_TOGGLE_FAST_EDIT 'tgfe'       ///< Toggle inline cell editing.
 #define MSG_VIEWS_REFRESH 'vwrf'          ///< Debounced view refresh trigger.
 #define MSG_VIEWS_REFRESH_PARTIAL 'vwrp'  ///< Refresh trigger for Filters.
 ///@}

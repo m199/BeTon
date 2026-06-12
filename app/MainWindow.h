@@ -267,6 +267,9 @@ private:
   BMenuItem *fTooltipsOnItem = nullptr;
   BMenuItem *fTooltipsOffItem = nullptr;
 
+  bool fFastEditEnabled = true;
+  BMenuItem *fFastEditItem = nullptr;
+
   bool fRadioEnabled = false;
   bool fDlnaEnabled = false;
 #if ENABLE_DLNA_OUTPUT

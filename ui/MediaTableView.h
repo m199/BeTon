@@ -94,6 +94,14 @@ public:
   bool HasActiveEditor() const { return fActiveEditor != nullptr; }
   BView* ActiveEditor() const;
 
+  /**
+   * @brief Enables or disables inline cell editing ("Fast Edit").
+   * When disabled, clicking a selected row neither opens the cell
+   * editor nor registers rating-star clicks.
+   */
+  void SetFastEditEnabled(bool enabled) { fFastEditEnabled = enabled; }
+  bool FastEditEnabled() const { return fFastEditEnabled; }
+
   void SaveState(BMessage *msg);
   void LoadState(BMessage *msg);
   
@@ -176,6 +184,7 @@ private:
 
   /** @name Cell Inline Editing */
   ///@{
+  bool fFastEditEnabled{true};
   CellTextControl *fActiveEditor{nullptr};
   BRow *fEditingRow{nullptr};
   BColumn *fEditingColumn{nullptr};
