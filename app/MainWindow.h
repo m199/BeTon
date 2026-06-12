@@ -62,6 +62,7 @@ class MetadataSyncConflictDialog;
 class MetadataSyncController;
 class ViewMessageHandler;
 class ViewStateController;
+class UndoManager;
 enum class PlaylistItemKind;
 
 /**
@@ -87,6 +88,7 @@ public:
 
   void MessageReceived(BMessage *msg) override;
   void WindowActivated(bool active) override;
+  void MenusBeginning() override;
 
   /** @name Helpers used by child windows/components */
   ///@{
@@ -269,6 +271,10 @@ private:
 
   bool fFastEditEnabled = false;
   BMenuItem *fFastEditItem = nullptr;
+
+  UndoManager *fUndoManager{nullptr};
+  BMenuItem *fUndoItem = nullptr;
+  BMenuItem *fRedoItem = nullptr;
 
   bool fRadioEnabled = false;
   bool fDlnaEnabled = false;

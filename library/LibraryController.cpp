@@ -9,6 +9,7 @@
 #include "PlaylistSidebarView.h"
 #include "MediaTableView.h"
 #include "StatusBarController.h"
+#include "UndoManager.h"
 #include <Catalog.h>
 #include <Directory.h>
 #include <MessageRunner.h>
@@ -142,6 +143,17 @@ void LibraryController::HandleFileMove(BMessage *msg) {
       if (changed)
         fWindow->fPlaylistLibrary->SavePlaylist(plName, paths);
     }
+  }
+
+  // Record the move as an undoable action (skip undo/redo replays).
+  if (!msg->HasBool("undo_replay") && fWindow->fUndoManager) {
+    BMessage u(MSG_FILE_MOVE);
+    u.AddString("from", newPath);
+    u.AddString("to", from);
+    BMessage r(MSG_FILE_MOVE);
+    r.AddString("from", from);
+    r.AddString("to", newPath);
+    fWindow->fUndoManager->RecordAction({u}, {r});
   }
 
   BString status(B_TRANSLATE("Moved to "));

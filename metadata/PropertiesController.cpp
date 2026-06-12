@@ -8,6 +8,7 @@
 
 #include "Messages.h"
 #include "Debug.h"
+#include "UndoManager.h"
 
 #include <Catalog.h>
 #include <Path.h>
@@ -15,6 +16,7 @@
 #include <File.h>
 #include <unistd.h>
 #include <Entry.h>
+#include <vector>
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "PropertiesController"
@@ -27,10 +29,81 @@ PropertiesController::~PropertiesController() {
 }
 
 /**
+ * @brief Captures pre-save field values as an undo action.
+ * @param msg The pending MSG_PROP_SAVE message.
+ *
+ * For every file in the message, the current library values of the
+ * fields being changed are packed into a replay MSG_PROP_SAVE that
+ * restores them. Skipped entirely when the save is itself a replay.
+ */
+void PropertiesController::_RecordUndoForPropertySave(BMessage *msg) {
+  if (msg->HasBool("undo_replay") || !fWindow->fUndoManager)
+    return;
+
+  std::vector<BMessage> undoMsgs;
+  BString file;
+  for (int32 i = 0; msg->FindString("file", i, &file) == B_OK; ++i) {
+    auto it = fWindow->fPathIndex.find(file);
+    if (it == fWindow->fPathIndex.end())
+      continue;
+    const MediaItem &old = fWindow->fAllItems[it->second];
+
+    BMessage u(MSG_PROP_SAVE);
+    u.AddString("file", file);
+    bool any = false;
+
+    auto addOld = [&](const char *field, const BString &val) {
+      if (msg->HasString(field)) {
+        u.AddString(field, val);
+        any = true;
+      }
+    };
+    addOld("title", old.title);
+    addOld("artist", old.artist);
+    addOld("album", old.album);
+    addOld("albumArtist", old.albumArtist);
+    addOld("composer", old.composer);
+    addOld("genre", old.genre);
+    addOld("comment", old.comment);
+    addOld("mbAlbumID", old.mbAlbumId);
+    addOld("mbArtistID", old.mbArtistId);
+    addOld("mbTrackID", old.mbTrackId);
+
+    auto addOldInt = [&](const char *field, int32 val) {
+      if (msg->HasString(field)) {
+        BString s;
+        s << val;
+        u.AddString(field, s);
+        any = true;
+      }
+    };
+    addOldInt("year", old.year);
+    addOldInt("track", old.track);
+    addOldInt("trackTotal", old.trackTotal);
+    addOldInt("disc", old.disc);
+    addOldInt("discTotal", old.discTotal);
+
+    if (msg->HasInt32("rating")) {
+      u.AddInt32("rating", old.rating);
+      any = true;
+    }
+
+    if (any)
+      undoMsgs.push_back(u);
+  }
+
+  if (!undoMsgs.empty())
+    fWindow->fUndoManager->RecordAction(std::move(undoMsgs),
+                                        {BMessage(*msg)});
+}
+
+/**
  * @brief Saves property edits asynchronously via `MetadataService`.
  * @param msg Message containing file list and edited metadata fields.
  */
 void PropertiesController::SavePropertyTags(BMessage *msg) {
+  _RecordUndoForPropertySave(msg);
+
   BString tmp;
   if (msg->FindString("mbAlbumID", &tmp) == B_OK)
     DEBUG_PRINT("PROP_SAVE: mbAlbumID='%s'\n", tmp.String());
@@ -167,6 +240,29 @@ void PropertiesController::SetRating(BMessage *msg) {
   BMessage files;
   if (msg->FindMessage("files", &files) != B_OK)
     return;
+
+  // Record per-file old ratings as an undo action (skip replays).
+  if (!msg->HasBool("undo_replay") && fWindow->fUndoManager) {
+    std::vector<BMessage> undoMsgs;
+    entry_ref undoRef;
+    for (int32 i = 0; files.FindRef("refs", i, &undoRef) == B_OK; i++) {
+      BPath p(&undoRef);
+      if (p.InitCheck() != B_OK)
+        continue;
+      auto it = fWindow->fPathIndex.find(p.Path());
+      if (it == fWindow->fPathIndex.end())
+        continue;
+      BMessage u(MSG_SET_RATING);
+      u.AddInt32("rating", fWindow->fAllItems[it->second].rating);
+      BMessage uf;
+      uf.AddRef("refs", &undoRef);
+      u.AddMessage("files", &uf);
+      undoMsgs.push_back(u);
+    }
+    if (!undoMsgs.empty())
+      fWindow->fUndoManager->RecordAction(std::move(undoMsgs),
+                                          {BMessage(*msg)});
+  }
 
   int32 skipped = 0;
   entry_ref ref;
