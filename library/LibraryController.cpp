@@ -419,56 +419,71 @@ struct TrackerRevealEntry {
 static int32 _TrackerSelectThread(void *data) {
   auto *entries = static_cast<std::vector<TrackerRevealEntry> *>(data);
 
-  snooze(400000); // 400 ms — enough for a new Tracker window to appear
-
   BMessenger tracker("application/x-vnd.Be-TRAK");
   if (!tracker.IsValid()) {
     delete entries;
     return B_OK;
   }
 
-  BMessage countMsg(B_COUNT_PROPERTIES);
-  countMsg.AddSpecifier("Window");
-  BMessage countReply;
-  if (tracker.SendMessage(&countMsg, &countReply, 0, 2000000) != B_OK) {
-    delete entries;
-    return B_OK;
-  }
-  int32 windowCount = 0;
-  countReply.FindInt32("result", &windowCount);
-
   // Gather refs per window index to batch into one B_SET_PROPERTY each.
+  // Retry while the freshly launched window has not appeared yet.
   std::map<int32, std::vector<entry_ref>> windowSelections;
 
-  for (auto &e : *entries) {
-    for (int32 i = 0; i < windowCount; ++i) {
-      BMessage pathMsg(B_GET_PROPERTY);
-      pathMsg.AddSpecifier("Path");
-      pathMsg.AddSpecifier("Poses");
-      pathMsg.AddSpecifier("Window", i);
+  for (int32 attempt = 0; attempt < 8; ++attempt) {
+    snooze(300000); // 300 ms between polls for the new window
+    windowSelections.clear();
 
-      BMessage pathReply;
-      if (tracker.SendMessage(&pathMsg, &pathReply, 0, 500000) != B_OK)
-        continue;
+    BMessage countMsg(B_COUNT_PROPERTIES);
+    countMsg.AddSpecifier("Window");
+    BMessage countReply;
+    if (tracker.SendMessage(&countMsg, &countReply, 0, 2000000) != B_OK)
+      continue;
+    int32 windowCount = 0;
+    countReply.FindInt32("result", &windowCount);
 
-      BString wPath;
-      if (pathReply.FindString("result", &wPath) != B_OK)
-        continue;
+    size_t matched = 0;
+    for (auto &e : *entries) {
+      for (int32 i = 0; i < windowCount; ++i) {
+        BMessage pathMsg(B_GET_PROPERTY);
+        pathMsg.AddSpecifier("Path");
+        pathMsg.AddSpecifier("Poses");
+        pathMsg.AddSpecifier("Window", i);
 
-      if (wPath == e.dirPath) {
-        windowSelections[i].push_back(e.fileRef);
-        break;
+        BMessage pathReply;
+        if (tracker.SendMessage(&pathMsg, &pathReply, 0, 500000) != B_OK)
+          continue;
+
+        // Tracker replies with the window's directory as an entry_ref.
+        entry_ref dirRef;
+        if (pathReply.FindRef("result", &dirRef) != B_OK)
+          continue;
+        BPath wPath(&dirRef);
+        if (wPath.InitCheck() != B_OK)
+          continue;
+
+        if (e.dirPath == wPath.Path()) {
+          windowSelections[i].push_back(e.fileRef);
+          ++matched;
+          break;
+        }
       }
     }
+
+    if (matched == entries->size())
+      break;
   }
 
   for (auto &[winIdx, fileRefs] : windowSelections) {
     BMessage sel(B_SET_PROPERTY);
-    sel.AddSpecifier("Selection");
+    // Tracker reads the refs to select from the "data" field of the
+    // direct specifier itself, not from the top-level message.
+    BMessage specifier(B_DIRECT_SPECIFIER);
+    specifier.AddString("property", "Selection");
+    for (auto &ref : fileRefs)
+      specifier.AddRef("data", &ref);
+    sel.AddSpecifier(&specifier);
     sel.AddSpecifier("Poses");
     sel.AddSpecifier("Window", winIdx);
-    for (auto &ref : fileRefs)
-      sel.AddRef("data", &ref);
     tracker.SendMessage(&sel);
   }
 
