@@ -475,15 +475,11 @@ static int32 _TrackerSelectThread(void *data) {
 
   for (auto &[winIdx, fileRefs] : windowSelections) {
     BMessage sel(B_SET_PROPERTY);
-    // Tracker reads the refs to select from the "data" field of the
-    // direct specifier itself, not from the top-level message.
-    BMessage specifier(B_DIRECT_SPECIFIER);
-    specifier.AddString("property", "Selection");
-    for (auto &ref : fileRefs)
-      specifier.AddRef("data", &ref);
-    sel.AddSpecifier(&specifier);
+    sel.AddSpecifier("Selection");
     sel.AddSpecifier("Poses");
     sel.AddSpecifier("Window", winIdx);
+    for (auto &ref : fileRefs)
+      sel.AddRef("data", &ref);
     tracker.SendMessage(&sel);
   }
 
