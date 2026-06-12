@@ -1124,7 +1124,14 @@ void MediaTableView::SaveScrollState() {
   fTopVisiblePath = "";
   fSavedSelectedPaths.clear();
 
-  if (BRow *topRow = RowAt(BPoint(0, 5))) {
+  // RowAt(BPoint) expects content-space coordinates: y=5 is always the
+  // first row of the list. Offset by the outline view's scroll position
+  // to probe the row actually visible at the top.
+  BPoint topPoint(0, 5);
+  if (BView *outline = ScrollView())
+    topPoint.y += outline->Bounds().top;
+
+  if (BRow *topRow = RowAt(topPoint)) {
     if (auto *mr = dynamic_cast<MediaRow *>(topRow)) {
       fTopVisiblePath = mr->Item().path;
     }
