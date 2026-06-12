@@ -562,6 +562,11 @@ void MainWindow::_BuildUI() {
   fRedoItem->SetEnabled(false);
   editMenu->AddItem(fUndoItem);
   editMenu->AddItem(fRedoItem);
+  editMenu->AddSeparatorItem();
+  fFastEditItem = new BMenuItem(B_TRANSLATE("Enable Fast Edit"),
+                                new BMessage(MSG_TOGGLE_FAST_EDIT), 'E');
+  fFastEditItem->SetMarked(fFastEditEnabled);
+  editMenu->AddItem(fFastEditItem);
   fMenuBar->AddItem(editMenu);
 
   BMenu *playlistMenu = new BMenu(B_TRANSLATE("Playlists"));
@@ -647,11 +652,6 @@ void MainWindow::_BuildUI() {
   tooltipsMenu->AddItem(fTooltipsOnItem);
   tooltipsMenu->AddItem(fTooltipsOffItem);
   fSettingsMenu->AddItem(tooltipsMenu);
-
-  fFastEditItem = new BMenuItem(B_TRANSLATE("Enable Fast Edit"),
-                                new BMessage(MSG_TOGGLE_FAST_EDIT));
-  fFastEditItem->SetMarked(fFastEditEnabled);
-  fSettingsMenu->AddItem(fFastEditItem);
 
   fMenuBar->AddItem(fSettingsMenu);
 
