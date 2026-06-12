@@ -16,10 +16,88 @@
 #include <FindDirectory.h>
 #include <Path.h>
 #include <Entry.h>
+#include <Directory.h>
+#include <algorithm>
+#include <stack>
 #include <random>
+#include "Config.h"
+#include "PlaylistSelectionController.h"
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "PlaylistEditController"
+
+static bool IsSupportedAudioFile(const BString &path) {
+  BString lower(path);
+  lower.ToLower();
+
+  static const char *exts[] = {".mp3", ".wav", ".flac", ".ogg",
+                               ".opus", ".m4a", ".aac",  ".wma"
+#if ENABLE_MIDI_PLAYBACK
+                               ,
+                               ".mid", ".midi"
+#endif
+  };
+
+  for (auto ext : exts) {
+    if (lower.EndsWith(ext))
+      return true;
+  }
+  return false;
+}
+
+void PlaylistEditController::ResolveRefRecursively(const entry_ref &ref, std::vector<BString> &outPaths) {
+  BEntry entry(&ref, true);
+  if (!entry.Exists())
+    return;
+
+  BPath path;
+  if (entry.GetPath(&path) != B_OK)
+    return;
+
+  if (entry.IsDirectory()) {
+    std::stack<BString> stack;
+    stack.push(path.Path());
+
+    while (!stack.empty()) {
+      BString currentPath = stack.top();
+      stack.pop();
+
+      BDirectory dir(currentPath.String());
+      if (dir.InitCheck() != B_OK)
+        continue;
+
+      BEntry childEntry;
+      dir.Rewind();
+      while (dir.GetNextEntry(&childEntry, true) == B_OK) {
+        BPath childPath;
+        if (childEntry.GetPath(&childPath) != B_OK)
+          continue;
+
+        BString leaf(childPath.Leaf());
+        if (leaf.Length() > 0 && leaf.ByteAt(0) == '.')
+          continue;
+
+        if (childEntry.IsDirectory()) {
+          stack.push(childPath.Path());
+        } else {
+          BString filePath(childPath.Path());
+          if (IsSupportedAudioFile(filePath)) {
+            if (std::find(outPaths.begin(), outPaths.end(), filePath) == outPaths.end()) {
+              outPaths.push_back(filePath);
+            }
+          }
+        }
+      }
+    }
+  } else {
+    BString filePath(path.Path());
+    if (IsSupportedAudioFile(filePath)) {
+      if (std::find(outPaths.begin(), outPaths.end(), filePath) == outPaths.end()) {
+        outPaths.push_back(filePath);
+      }
+    }
+  }
+}
 
 PlaylistEditController::PlaylistEditController(MainWindow* window)
     : fWindow(window)  {
@@ -33,14 +111,25 @@ void PlaylistEditController::PromptNewPlaylist(BMessage *msg) {
   fPendingPlaylistFiles.MakeEmpty();
 
   BMessage filesMsg;
+  BString initialName;
   if (msg->FindMessage("files", &filesMsg) == B_OK) {
     fPendingPlaylistFiles = filesMsg;
-    DEBUG_PRINT("%ld"
-                " Files for new playlist buffered\n",
+    DEBUG_PRINT("%ld Files for new playlist buffered\n",
                 (long)filesMsg.CountNames(B_REF_TYPE));
+    
+    entry_ref ref;
+    if (filesMsg.FindRef("refs", 0, &ref) == B_OK) {
+      BEntry entry(&ref, true);
+      if (entry.Exists() && entry.IsDirectory()) {
+        initialName = ref.name;
+      }
+    }
   }
 
   PlaylistNameDialog *prompt = new PlaylistNameDialog(BMessenger(fWindow));
+  if (!initialName.IsEmpty()) {
+    prompt->SetInitialName(initialName);
+  }
   prompt->Show();
 }
 
@@ -71,18 +160,34 @@ void PlaylistEditController::CreatePlaylistFromPrompt(BMessage *msg) {
   if (msg->FindString("name", &name) != B_OK || name.IsEmpty())
     return;
 
-
   fWindow->fPlaylistLibrary->CreateNewPlaylist(name);
 
+  std::vector<BString> resolvedPaths;
   entry_ref ref;
   int32 i = 0;
   while (fPendingPlaylistFiles.FindRef("refs", i++, &ref) == B_OK) {
-    BPath path(&ref);
-    fWindow->fPlaylistLibrary->AddItemToPlaylist(name, path.Path());
-    DEBUG_PRINT("Files '%s' added to new playlist '%s'\n",
-                path.Path(), name.String());
+    ResolveRefRecursively(ref, resolvedPaths);
+  }
+
+  for (const auto &path : resolvedPaths) {
+    fWindow->fPlaylistLibrary->AddItemToPlaylist(name, path);
+    DEBUG_PRINT("File '%s' added to new playlist '%s'\n",
+                path.String(), name.String());
   }
   fPendingPlaylistFiles.MakeEmpty();
+
+  if (name == fWindow->fCurrentPlaylistName) {
+    int32 selected = fWindow->fPlaylistLibrary->View()->CurrentSelection();
+    if (selected >= 0) {
+      BMessage selMsg(MSG_PLAYLIST_SELECTION);
+      selMsg.AddInt32("index", selected);
+      selMsg.AddString("name", name);
+      if (fWindow->Lock()) {
+        fWindow->fPlaylistSelectionController->HandlePlaylistSelection(&selMsg);
+        fWindow->Unlock();
+      }
+    }
+  }
 }
 
 void PlaylistEditController::RenamePlaylistFromPrompt(BMessage *msg) {
@@ -248,6 +353,79 @@ void PlaylistEditController::ReorderPlaylist(BMessage *msg) {
 
 void PlaylistEditController::HandlePlaylistDrop(BMessage *msg) {
   DEBUG_PRINT("B_SIMPLE_DATA received!\n");
+
+  BString destPlaylist;
+  BMessage filesMsg;
+  if (msg->FindString("playlist", &destPlaylist) == B_OK &&
+      msg->FindMessage("files", &filesMsg) == B_OK) {
+    
+    if (destPlaylist.IsEmpty() || !fWindow->fPlaylistLibrary->IsPlaylistWritable(destPlaylist)) {
+      return;
+    }
+
+    std::vector<BString> resolvedPaths;
+    entry_ref ref;
+    int32 i = 0;
+    while (filesMsg.FindRef("refs", i++, &ref) == B_OK) {
+      ResolveRefRecursively(ref, resolvedPaths);
+    }
+
+    if (resolvedPaths.empty())
+      return;
+
+    for (const auto &path : resolvedPaths) {
+      fWindow->fPlaylistLibrary->AddItemToPlaylist(destPlaylist, path);
+    }
+
+    if (destPlaylist == fWindow->fCurrentPlaylistName) {
+      int32 selected = fWindow->fPlaylistLibrary->View()->CurrentSelection();
+      if (selected >= 0) {
+        BMessage selMsg(MSG_PLAYLIST_SELECTION);
+        selMsg.AddInt32("index", selected);
+        selMsg.AddString("name", destPlaylist);
+        if (fWindow->Lock()) {
+          fWindow->fPlaylistSelectionController->HandlePlaylistSelection(&selMsg);
+          fWindow->Unlock();
+        }
+      }
+    }
+    return;
+  }
+
+  if (msg->HasRef("refs")) {
+    if (fWindow->fCurrentPlaylistName.IsEmpty() ||
+        !fWindow->fPlaylistLibrary->IsPlaylistWritable(fWindow->fCurrentPlaylistName)) {
+      DEBUG_PRINT("Drop ignored: active playlist '%s' is not writable or empty\n",
+                  fWindow->fCurrentPlaylistName.String());
+      return;
+    }
+
+    std::vector<BString> resolvedPaths;
+    entry_ref ref;
+    int32 i = 0;
+    while (msg->FindRef("refs", i++, &ref) == B_OK) {
+      ResolveRefRecursively(ref, resolvedPaths);
+    }
+
+    if (resolvedPaths.empty())
+      return;
+
+    for (const auto &path : resolvedPaths) {
+      fWindow->fPlaylistLibrary->AddItemToPlaylist(fWindow->fCurrentPlaylistName, path);
+    }
+
+    int32 selected = fWindow->fPlaylistLibrary->View()->CurrentSelection();
+    if (selected >= 0) {
+      BMessage selMsg(MSG_PLAYLIST_SELECTION);
+      selMsg.AddInt32("index", selected);
+      selMsg.AddString("name", fWindow->fCurrentPlaylistName);
+      if (fWindow->Lock()) {
+        fWindow->fPlaylistSelectionController->HandlePlaylistSelection(&selMsg);
+        fWindow->Unlock();
+      }
+    }
+    return;
+  }
 
   int32 sourceIndex = -1;
   if (msg->FindInt32("source_index", &sourceIndex) != B_OK) {

@@ -287,8 +287,13 @@ public:
     if (!fOwner || !msg || msg->what != B_SIMPLE_DATA)
       return B_DISPATCH_MESSAGE;
 
-    if (fOwner->fDragSourceIndex < 0)
+    if (fOwner->fDragSourceIndex < 0) {
+      if (msg->HasRef("refs") && fOwner->Looper()) {
+        fOwner->Looper()->PostMessage(msg);
+        return B_SKIP_MESSAGE;
+      }
       return B_DISPATCH_MESSAGE;
+    }
 
     BView *v = dynamic_cast<BView *>(*target);
     if (!v)
