@@ -1069,8 +1069,10 @@ void MediaTableView::_AddBatch(size_t count) {
     }
 
     bool scrolled = false;
+    float rowTop = 0;
     for (int32 i = 0; i < CountRows(); i++) {
-      if (auto *mr = dynamic_cast<MediaRow *>(RowAt(i))) {
+      BRow *row = RowAt(i);
+      if (auto *mr = dynamic_cast<MediaRow *>(row)) {
         for (const auto &sp : fSavedSelectedPaths) {
           if (mr->Item().path == sp) {
             AddToSelection(mr);
@@ -1079,10 +1081,15 @@ void MediaTableView::_AddBatch(size_t count) {
         }
         if (!scrolled && !fTopVisiblePath.IsEmpty() &&
             mr->Item().path == fTopVisiblePath) {
-          ScrollTo(mr);
+          // ScrollTo(BRow*) only scrolls minimally, which would leave
+          // this row at the bottom edge; scroll explicitly so the
+          // previously top-visible row is at the top again.
+          ScrollTo(BPoint(0, rowTop));
           scrolled = true;
         }
       }
+      if (row)
+        rowTop += row->Height() + 1;
     }
     fTopVisiblePath = "";
     fSavedSelectedPaths.clear();
