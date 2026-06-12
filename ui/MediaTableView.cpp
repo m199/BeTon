@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <cinttypes>
 #include <memory>
+#include <set>
 #include <unistd.h>
 
 #undef B_TRANSLATION_CONTEXT
@@ -684,6 +685,11 @@ MediaTableView::MediaTableView(const char *name)
     if (auto *col = dynamic_cast<StatusStringColumn *>(ColumnAt(i))) {
       col->SetOwner(this);
     }
+    if (auto *col = ColumnAt(i)) {
+      int32 field = col->LogicalFieldNum();
+      fUserColumnVisibility[field] = true;
+      fColumnByField[field] = col;
+    }
   }
 }
 
@@ -718,6 +724,18 @@ void MediaTableView::SetNowPlayingPath(const BString &path) {
  * @param radio True for radio layout, false for library layout.
  */
 void MediaTableView::SetRadioMode(bool radio) {
+  if (fIsRadioMode == radio)
+    return;
+
+  // Save current visibility state of columns if leaving standard mode
+  if (!fIsRadioMode) {
+    for (int32 i = 0; i < CountColumns(); ++i) {
+      if (BColumn *col = ColumnAt(i)) {
+        fUserColumnVisibility[col->LogicalFieldNum()] = col->IsVisible();
+      }
+    }
+  }
+
   fIsRadioMode = radio;
 
   static const int32 kRadioFields[] = {0, 1, 2, 4, 10};
@@ -740,7 +758,11 @@ void MediaTableView::SetRadioMode(bool radio) {
       }
       col->SetVisible(show);
     } else {
-      col->SetVisible(true);
+      bool visible = true;
+      auto it = fUserColumnVisibility.find(field);
+      if (it != fUserColumnVisibility.end())
+        visible = it->second;
+      col->SetVisible(visible);
     }
 
     auto *titled = dynamic_cast<BTitledColumn *>(col);
@@ -1590,22 +1612,74 @@ void MediaTableView::SaveState(BMessage *msg) {
   msg->RemoveName("col_width");
   msg->RemoveName("col_visible");
 
+  // Helper lambda to get the title from any of our column types.
+  auto titleFor = [](BColumn *col) -> BString {
+    if (auto *sc = dynamic_cast<StatusStringColumn *>(col))
+      return sc->Title();
+    if (auto *ic = dynamic_cast<StatusIntegerColumn *>(col))
+      return ic->Title();
+    if (auto *rc = dynamic_cast<RatingColumn *>(col))
+      return rc->Title();
+    return BString();
+  };
+
+  // Phase 1: iterate columns returned by ColumnAt (visible display order).
+  // On some Haiku versions ColumnAt skips hidden columns, so we track which
+  // field numbers we cover here and handle the rest in Phase 2.
+  std::set<int32> savedFields;
+
   for (int32 i = 0; i < CountColumns(); ++i) {
     BColumn *col = ColumnAt(i);
-    BString name;
-    if (auto *sc = dynamic_cast<StatusStringColumn *>(col)) {
-      name = sc->Title();
-    } else if (auto *ic = dynamic_cast<StatusIntegerColumn *>(col)) {
-      name = ic->Title();
-    } else if (auto *rc = dynamic_cast<RatingColumn *>(col)) {
-      name = rc->Title();
+    if (!col)
+      continue;
+
+    BString name = titleFor(col);
+    if (name.IsEmpty())
+      continue;
+
+    int32 field = col->LogicalFieldNum();
+    savedFields.insert(field);
+
+    bool visible = col->IsVisible();
+    if (!fIsRadioMode) {
+      fUserColumnVisibility[field] = visible;
+    } else {
+      auto it = fUserColumnVisibility.find(field);
+      visible = (it != fUserColumnVisibility.end()) ? it->second : true;
     }
 
-    if (!name.IsEmpty()) {
-      msg->AddString("col_name", name);
-      msg->AddFloat("col_width", col->Width());
-      msg->AddBool("col_visible", col->IsVisible());
+    msg->AddString("col_name", name);
+    msg->AddFloat("col_width", col->Width());
+    msg->AddBool("col_visible", visible);
+  }
+
+  // Phase 2: emit any columns that ColumnAt didn't return (hidden columns).
+  // fColumnByField is populated at construction when all columns are visible,
+  // so it always contains the full set regardless of current visibility.
+  for (auto &[field, col] : fColumnByField) {
+    if (savedFields.count(field) > 0)
+      continue;
+
+    BString name = titleFor(col);
+    if (name.IsEmpty())
+      continue;
+
+    // Column was not returned by ColumnAt, meaning it is hidden in the
+    // current mode.  In library mode the user explicitly hid it (visible=false).
+    // In radio mode, use the cached library-mode visibility from
+    // fUserColumnVisibility so we don't clobber the user's library preference.
+    bool visible;
+    if (!fIsRadioMode) {
+      visible = false;
+      fUserColumnVisibility[field] = false;
+    } else {
+      auto it = fUserColumnVisibility.find(field);
+      visible = (it != fUserColumnVisibility.end()) ? it->second : true;
     }
+
+    msg->AddString("col_name", name);
+    msg->AddFloat("col_width", col->Width());
+    msg->AddBool("col_visible", visible);
   }
 }
 
@@ -1651,6 +1725,7 @@ void MediaTableView::LoadState(BMessage *msg) {
       BColumn *col = cols[colName];
       col->SetWidth(colWidth);
       col->SetVisible(colVisible);
+      fUserColumnVisibility[col->LogicalFieldNum()] = colVisible;
       MoveColumn(col, i);
     }
     i++;

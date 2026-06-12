@@ -169,6 +169,8 @@ private:
   bool fIsRadioMode{false};
   bool fIsPlaylistMode{false};
   std::vector<std::pair<int32, BColumn*>> fHiddenColumns; ///< Columns removed in radio mode
+  std::map<int32, bool> fUserColumnVisibility;
+  std::map<int32, BColumn*> fColumnByField; ///< All columns by field num, populated at construction
   ///@}
 
   /** @name Cell Inline Editing */
