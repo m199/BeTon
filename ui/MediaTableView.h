@@ -79,8 +79,10 @@ public:
   /**
    * @brief Updates a single row in-place with new metadata without rebuilding the list.
    * @param mi The updated media item.
+   * @param matchPath Optional row key; rows are matched against this path
+   *                  instead of mi.path (used when the path itself changed).
    */
-  void UpdateItem(const MediaItem &mi);
+  void UpdateItem(const MediaItem &mi, const BString *matchPath = nullptr);
 
   void StartCellEdit(BRow *row, BColumn *column, int32 colIdx, float colLeft, BView *targetView);
   void CommitCellEdit();

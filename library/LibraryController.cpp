@@ -10,6 +10,7 @@
 #include "MediaTableView.h"
 #include "StatusBarController.h"
 #include <Catalog.h>
+#include <Directory.h>
 #include <MessageRunner.h>
 #include <Entry.h>
 #include <Messenger.h>
@@ -33,6 +34,96 @@ LibraryController::~LibraryController() {}
 void LibraryController::ShowDirectoryManager() {
   MusicSourceManagerWindow *win = new MusicSourceManagerWindow(fWindow->fMediaLibraryCache);
   win->Show();
+}
+
+/**
+ * @brief Moves a file on disk and updates library state on success.
+ */
+void LibraryController::HandleFileMove(BMessage *msg) {
+  BString from, to;
+  if (msg->FindString("from", &from) != B_OK ||
+      msg->FindString("to", &to) != B_OK)
+    return;
+  if (from.IsEmpty() || to.IsEmpty() || from == to)
+    return;
+
+  if (to[0] != '/') {
+    fWindow->UpdateStatus(B_TRANSLATE("Move failed: path must be absolute"));
+    return;
+  }
+
+  BEntry entry(from.String());
+  if (entry.InitCheck() != B_OK || !entry.Exists()) {
+    fWindow->UpdateStatus(B_TRANSLATE("Move failed: source file not found"));
+    return;
+  }
+
+  BPath toPath(to.String());
+  BPath toDir;
+  if (toPath.InitCheck() != B_OK || toPath.GetParent(&toDir) != B_OK ||
+      !toPath.Leaf() || toPath.Leaf()[0] == '\0') {
+    fWindow->UpdateStatus(B_TRANSLATE("Move failed: invalid target path"));
+    return;
+  }
+
+  BDirectory dir(toDir.Path());
+  if (dir.InitCheck() != B_OK) {
+    fWindow->UpdateStatus(
+        B_TRANSLATE("Move failed: target folder does not exist"));
+    return;
+  }
+
+  status_t st = entry.MoveTo(&dir, toPath.Leaf(), false);
+  if (st != B_OK) {
+    BString status(B_TRANSLATE("Move failed: "));
+    status << strerror(st);
+    fWindow->UpdateStatus(status);
+    return;
+  }
+
+  BString newPath = toPath.Path();
+
+  // Update the in-memory model and the visible row.
+  MediaTableView *cv =
+      (fWindow->fLibraryManager) ? fWindow->fLibraryManager->ContentView()
+                                 : nullptr;
+
+  auto mapIt = fWindow->fPathIndex.find(from);
+  if (mapIt != fWindow->fPathIndex.end()) {
+    size_t idx = mapIt->second;
+    fWindow->fPathIndex.erase(mapIt);
+    fWindow->fAllItems[idx].path = newPath;
+    fWindow->fPathIndex[newPath] = idx;
+    if (cv)
+      cv->UpdateItem(fWindow->fAllItems[idx], &from);
+  } else if (cv) {
+    // Items outside the library index (e.g. playlist-only entries):
+    // update the visible row directly.
+    for (int32 i = 0; i < cv->CountRows(); ++i) {
+      const MediaItem *mi = cv->ItemAt(i);
+      if (mi && mi->path == from) {
+        MediaItem updated = *mi;
+        updated.path = newPath;
+        cv->UpdateItem(updated, &from);
+        break;
+      }
+    }
+  }
+
+  if (cv && cv->NowPlayingPath() == from)
+    cv->SetNowPlayingPath(newPath);
+
+  // Rekey the persistent cache entry.
+  if (fWindow->fMediaLibraryCache) {
+    BMessage moved(MSG_FILE_MOVED);
+    moved.AddString("from", from);
+    moved.AddString("to", newPath);
+    fWindow->fMediaLibraryCache->PostMessage(&moved);
+  }
+
+  BString status(B_TRANSLATE("Moved to "));
+  status << newPath;
+  fWindow->UpdateStatus(status);
 }
 
 /**

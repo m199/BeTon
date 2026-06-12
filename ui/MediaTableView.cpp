@@ -853,10 +853,11 @@ void MediaTableView::AddEntry(const MediaItem &mi) {
   AddRow(row);
 }
 
-void MediaTableView::UpdateItem(const MediaItem &mi) {
+void MediaTableView::UpdateItem(const MediaItem &mi, const BString *matchPath) {
+  const BString &key = matchPath ? *matchPath : mi.path;
   for (int32 i = 0; i < CountRows(); ++i) {
     MediaRow *mr = dynamic_cast<MediaRow *>(RowAt(i));
-    if (mr && mr->Item().path == mi.path) {
+    if (mr && mr->Item().path == key) {
       mr->SetItem(mi);
 
       bool m = mi.missing;
@@ -1981,12 +1982,23 @@ void MediaTableView::CommitCellEdit() {
       BString path = mr->Item().path;
       const char *fieldName = FieldNameForColumn(fEditingColIdx);
       if (fieldName && !path.IsEmpty()) {
-        BMessage saveMsg(MSG_PROP_SAVE);
-        saveMsg.AddString("file", path);
-        saveMsg.AddString(fieldName, newText);
+        if (fEditingColIdx == 10) {
+          // Path edits move the file on disk instead of writing tags.
+          if (!newText.IsEmpty() && newText != path) {
+            BMessage moveMsg(MSG_FILE_MOVE);
+            moveMsg.AddString("from", path);
+            moveMsg.AddString("to", newText);
+            if (Window())
+              Window()->PostMessage(&moveMsg);
+          }
+        } else {
+          BMessage saveMsg(MSG_PROP_SAVE);
+          saveMsg.AddString("file", path);
+          saveMsg.AddString(fieldName, newText);
 
-        if (Window()) {
-          Window()->PostMessage(&saveMsg);
+          if (Window()) {
+            Window()->PostMessage(&saveMsg);
+          }
         }
       }
     }
@@ -2026,6 +2038,7 @@ const char *MediaTableView::FieldNameForColumn(int32 colIdx) const {
     case 5: return "year";
     case 7: return "track";
     case 8: return "disc";
+    case 10: return "path";
     default: return nullptr;
   }
 }

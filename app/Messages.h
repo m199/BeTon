@@ -78,6 +78,8 @@
 #define MSG_TOOLTIPS_ON 'tton'            ///< Enable tooltips.
 #define MSG_TOOLTIPS_OFF 'ttof'           ///< Disable tooltips.
 #define MSG_TOGGLE_FAST_EDIT 'tgfe'       ///< Toggle inline cell editing.
+#define MSG_FILE_MOVE 'fmov'              ///< Request file move ("from"/"to" paths).
+#define MSG_FILE_MOVED 'fmvd'             ///< File moved on disk; rekey cache entry.
 #define MSG_VIEWS_REFRESH 'vwrf'          ///< Debounced view refresh trigger.
 #define MSG_VIEWS_REFRESH_PARTIAL 'vwrp'  ///< Refresh trigger for Filters.
 ///@}
