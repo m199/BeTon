@@ -1198,6 +1198,13 @@ void MediaTableView::KeyDown(const char *bytes, int32 numBytes) {
     if (currentMsg)
       currentMsg->FindInt32("modifiers", (int32 *)&modifiers);
 
+    if ((modifiers & B_COMMAND_KEY) && (bytes[0] == 'a' || bytes[0] == 'A')) {
+      for (int32 i = 0; i < CountRows(); ++i)
+        if (BRow *row = RowAt(i))
+          AddToSelection(row);
+      return;
+    }
+
     if (modifiers & B_OPTION_KEY) {
       if (bytes[0] == B_UP_ARROW) {
         BMessage msg(MSG_MOVE_UP);
