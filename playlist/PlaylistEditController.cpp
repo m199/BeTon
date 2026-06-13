@@ -1,6 +1,8 @@
 #include "PlaylistEditController.h"
 
 #include "MainWindow.h"
+#include "LibraryController.h"
+#include "UndoManager.h"
 #include "PlaylistLibrary.h"
 #include "LibraryBrowserController.h"
 #include "MediaTableView.h"
@@ -188,6 +190,19 @@ void PlaylistEditController::CreatePlaylistFromPrompt(BMessage *msg) {
       }
     }
   }
+
+  if (!msg->HasBool("undo_replay") && fWindow->fUndoManager) {
+    BMessage u(MSG_DELETE_PLAYLIST_BY_NAME);
+    u.AddString("playlist", name);
+
+    BMessage r(MSG_CREATE_PLAYLIST_WITH_PATHS);
+    r.AddString("playlist", name);
+    for (const auto &p : resolvedPaths) {
+      r.AddString("paths", p);
+    }
+
+    fWindow->fUndoManager->RecordAction({u}, {r});
+  }
 }
 
 void PlaylistEditController::RenamePlaylistFromPrompt(BMessage *msg) {
@@ -265,6 +280,8 @@ void PlaylistEditController::MovePlaylistItem(BMessage *msg) {
   if (newIndex < 0 || newIndex >= cv->CountRows())
     return;
 
+  std::vector<BString> beforePaths = fWindow->fPlaylistLibrary->LoadPlaylist(playlistName);
+
   fWindow->fPlaylistLibrary->ReorderPlaylistItem(playlistName, index, newIndex);
 
   std::vector<MediaItem> items;
@@ -291,6 +308,19 @@ void PlaylistEditController::MovePlaylistItem(BMessage *msg) {
     cv->AddToSelection(row);
     cv->ScrollTo(row);
   }
+
+  std::vector<BString> afterPaths = fWindow->fPlaylistLibrary->LoadPlaylist(playlistName);
+  if (!msg->HasBool("undo_replay") && fWindow->fUndoManager) {
+    BMessage u(MSG_RESTORE_PLAYLIST_PATHS);
+    u.AddString("playlist", playlistName);
+    for (const auto &p : beforePaths) u.AddString("paths", p);
+
+    BMessage r(MSG_RESTORE_PLAYLIST_PATHS);
+    r.AddString("playlist", playlistName);
+    for (const auto &p : afterPaths) r.AddString("paths", p);
+
+    fWindow->fUndoManager->RecordAction({u}, {r});
+  }
 }
 
 void PlaylistEditController::ReorderPlaylist(BMessage *msg) {
@@ -313,6 +343,8 @@ void PlaylistEditController::ReorderPlaylist(BMessage *msg) {
   MediaTableView *cv = fWindow->fLibraryManager->ContentView();
   if (toIndex >= cv->CountRows())
     toIndex = cv->CountRows() - 1;
+
+  std::vector<BString> beforePaths = fWindow->fPlaylistLibrary->LoadPlaylist(playlistName);
 
   fWindow->fPlaylistLibrary->ReorderPlaylistItem(playlistName, fromIndex, toIndex);
 
@@ -349,6 +381,19 @@ void PlaylistEditController::ReorderPlaylist(BMessage *msg) {
 
   cv->Sync();
   fWindow->UpdateIfNeeded();
+
+  std::vector<BString> afterPaths = fWindow->fPlaylistLibrary->LoadPlaylist(playlistName);
+  if (!msg->HasBool("undo_replay") && fWindow->fUndoManager) {
+    BMessage u(MSG_RESTORE_PLAYLIST_PATHS);
+    u.AddString("playlist", playlistName);
+    for (const auto &p : beforePaths) u.AddString("paths", p);
+
+    BMessage r(MSG_RESTORE_PLAYLIST_PATHS);
+    r.AddString("playlist", playlistName);
+    for (const auto &p : afterPaths) r.AddString("paths", p);
+
+    fWindow->fUndoManager->RecordAction({u}, {r});
+  }
 }
 
 void PlaylistEditController::HandlePlaylistDrop(BMessage *msg) {
@@ -362,6 +407,8 @@ void PlaylistEditController::HandlePlaylistDrop(BMessage *msg) {
     if (destPlaylist.IsEmpty() || !fWindow->fPlaylistLibrary->IsPlaylistWritable(destPlaylist)) {
       return;
     }
+
+    std::vector<BString> beforePaths = fWindow->fPlaylistLibrary->LoadPlaylist(destPlaylist);
 
     std::vector<BString> resolvedPaths;
     entry_ref ref;
@@ -389,6 +436,19 @@ void PlaylistEditController::HandlePlaylistDrop(BMessage *msg) {
         }
       }
     }
+
+    std::vector<BString> afterPaths = fWindow->fPlaylistLibrary->LoadPlaylist(destPlaylist);
+    if (!msg->HasBool("undo_replay") && fWindow->fUndoManager) {
+      BMessage u(MSG_RESTORE_PLAYLIST_PATHS);
+      u.AddString("playlist", destPlaylist);
+      for (const auto &p : beforePaths) u.AddString("paths", p);
+
+      BMessage r(MSG_RESTORE_PLAYLIST_PATHS);
+      r.AddString("playlist", destPlaylist);
+      for (const auto &p : afterPaths) r.AddString("paths", p);
+
+      fWindow->fUndoManager->RecordAction({u}, {r});
+    }
     return;
   }
 
@@ -399,6 +459,8 @@ void PlaylistEditController::HandlePlaylistDrop(BMessage *msg) {
                   fWindow->fCurrentPlaylistName.String());
       return;
     }
+
+    std::vector<BString> beforePaths = fWindow->fPlaylistLibrary->LoadPlaylist(fWindow->fCurrentPlaylistName);
 
     std::vector<BString> resolvedPaths;
     entry_ref ref;
@@ -423,6 +485,19 @@ void PlaylistEditController::HandlePlaylistDrop(BMessage *msg) {
         fWindow->fPlaylistSelectionController->HandlePlaylistSelection(&selMsg);
         fWindow->Unlock();
       }
+    }
+
+    std::vector<BString> afterPaths = fWindow->fPlaylistLibrary->LoadPlaylist(fWindow->fCurrentPlaylistName);
+    if (!msg->HasBool("undo_replay") && fWindow->fUndoManager) {
+      BMessage u(MSG_RESTORE_PLAYLIST_PATHS);
+      u.AddString("playlist", fWindow->fCurrentPlaylistName);
+      for (const auto &p : beforePaths) u.AddString("paths", p);
+
+      BMessage r(MSG_RESTORE_PLAYLIST_PATHS);
+      r.AddString("playlist", fWindow->fCurrentPlaylistName);
+      for (const auto &p : afterPaths) r.AddString("paths", p);
+
+      fWindow->fUndoManager->RecordAction({u}, {r});
     }
     return;
   }
@@ -457,6 +532,8 @@ void PlaylistEditController::HandlePlaylistDrop(BMessage *msg) {
   if (sourceIndex == targetIndex || sourceIndex < 0 || targetIndex < 0)
     return;
 
+  std::vector<BString> beforePaths = fWindow->fPlaylistLibrary->LoadPlaylist(playlistName);
+
   fWindow->fPlaylistLibrary->ReorderPlaylistItem(playlistName, sourceIndex, targetIndex);
 
   std::vector<MediaItem> items;
@@ -482,6 +559,19 @@ void PlaylistEditController::HandlePlaylistDrop(BMessage *msg) {
     cv->AddToSelection(row);
     cv->ScrollTo(row);
   }
+
+  std::vector<BString> afterPaths = fWindow->fPlaylistLibrary->LoadPlaylist(playlistName);
+  if (!msg->HasBool("undo_replay") && fWindow->fUndoManager) {
+    BMessage u(MSG_RESTORE_PLAYLIST_PATHS);
+    u.AddString("playlist", playlistName);
+    for (const auto &p : beforePaths) u.AddString("paths", p);
+
+    BMessage r(MSG_RESTORE_PLAYLIST_PATHS);
+    r.AddString("playlist", playlistName);
+    for (const auto &p : afterPaths) r.AddString("paths", p);
+
+    fWindow->fUndoManager->RecordAction({u}, {r});
+  }
 }
 
 void PlaylistEditController::AddSelectedItemsToPlaylist(BMessage *msg) {
@@ -495,6 +585,8 @@ void PlaylistEditController::AddSelectedItemsToPlaylist(BMessage *msg) {
                 playlist.String());
     return;
   }
+
+  std::vector<BString> beforePaths = fWindow->fPlaylistLibrary->LoadPlaylist(playlist);
 
   int32 index;
   bool hadAny = false;
@@ -521,6 +613,19 @@ void PlaylistEditController::AddSelectedItemsToPlaylist(BMessage *msg) {
                 (long)index, playlist.String(), path.String());
 
     fWindow->fPlaylistLibrary->AddItemToPlaylist(playlist, path);
+  }
+
+  std::vector<BString> afterPaths = fWindow->fPlaylistLibrary->LoadPlaylist(playlist);
+  if (!msg->HasBool("undo_replay") && fWindow->fUndoManager) {
+    BMessage u(MSG_RESTORE_PLAYLIST_PATHS);
+    u.AddString("playlist", playlist);
+    for (const auto &p : beforePaths) u.AddString("paths", p);
+
+    BMessage r(MSG_RESTORE_PLAYLIST_PATHS);
+    r.AddString("playlist", playlist);
+    for (const auto &p : afterPaths) r.AddString("paths", p);
+
+    fWindow->fUndoManager->RecordAction({u}, {r});
   }
 }
 
@@ -667,6 +772,14 @@ void PlaylistEditController::DeleteSelectedPlaylistItems() {
   }
 
   if (!removedPaths.empty() && fWindow->fCurrentPlaylistName.Length() > 0) {
+    std::vector<BString> beforePaths;
+    for (int32 i = 0; i < cv->CountRows(); i++) {
+      const MediaItem *mi = cv->ItemAt(i);
+      if (mi) {
+        beforePaths.push_back(mi->path);
+      }
+    }
+
     for (const auto &path : removedPaths) {
       for (int32 i = 0; i < cv->CountRows(); i++) {
         const MediaItem *mi = cv->ItemAt(i);
@@ -687,6 +800,207 @@ void PlaylistEditController::DeleteSelectedPlaylistItems() {
       }
     }
     fWindow->fPlaylistLibrary->SavePlaylist(fWindow->fCurrentPlaylistName, remainingPaths);
+
+    if (fWindow->fUndoManager) {
+      BMessage u(MSG_RESTORE_PLAYLIST_PATHS);
+      u.AddString("playlist", fWindow->fCurrentPlaylistName);
+      for (const auto &p : beforePaths)
+        u.AddString("paths", p);
+
+      BMessage r(MSG_RESTORE_PLAYLIST_PATHS);
+      r.AddString("playlist", fWindow->fCurrentPlaylistName);
+      for (const auto &p : remainingPaths)
+        r.AddString("paths", p);
+
+      fWindow->fUndoManager->RecordAction({u}, {r});
+    }
+  }
+}
+
+void PlaylistEditController::MoveSelectedItemsToTrash() {
+  if (fWindow->fCurrentPlaylistName.IsEmpty() ||
+      !fWindow->fPlaylistLibrary->IsPlaylistWritable(fWindow->fCurrentPlaylistName)) {
+    return;
+  }
+
+  MediaTableView *cv = fWindow->fLibraryManager->ContentView();
+  std::vector<BString> selectedPaths;
+  BRow *row = nullptr;
+  while ((row = cv->CurrentSelection(row)) != nullptr) {
+    const MediaItem *mi = cv->ItemAt(cv->IndexOf(row));
+    if (mi) {
+      selectedPaths.push_back(mi->path);
+    }
+  }
+
+  if (selectedPaths.empty())
+    return;
+
+  BPath trashPath;
+  if (find_directory(B_TRASH_DIRECTORY, &trashPath) != B_OK) {
+    fWindow->UpdateStatus(B_TRANSLATE("Failed to find Trash directory"));
+    return;
+  }
+
+  std::vector<BMessage> undoMsgs;
+  std::vector<BMessage> redoMsgs;
+
+  // 1. Save before paths of the playlist
+  std::vector<BString> beforePaths = fWindow->fPlaylistLibrary->LoadPlaylist(fWindow->fCurrentPlaylistName);
+
+  // 2. Move files to trash
+  for (const auto &path : selectedPaths) {
+    BEntry entry(path.String(), true);
+    if (!entry.Exists())
+      continue;
+
+    char leafName[B_FILE_NAME_LENGTH];
+    entry.GetName(leafName);
+
+    BPath targetTrashPath(trashPath.Path(), leafName);
+    BEntry testEntry(targetTrashPath.Path());
+    if (testEntry.Exists()) {
+      BString nameStr(leafName);
+      int32 extIdx = nameStr.FindLast('.');
+      BString base = (extIdx != B_ERROR) ? nameStr.Left(extIdx) : nameStr;
+      BString ext = (extIdx != B_ERROR) ? nameStr.Substring(extIdx) : "";
+      int32 counter = 1;
+      do {
+        BString newLeafName;
+        newLeafName << base << " " << counter << ext;
+        targetTrashPath.SetTo(trashPath.Path(), newLeafName.String());
+        testEntry.SetTo(targetTrashPath.Path());
+        counter++;
+      } while (testEntry.Exists());
+    }
+
+    BString uniqueTrashPath = targetTrashPath.Path();
+
+    // Build the file move message
+    BMessage moveMsg(MSG_FILE_MOVE);
+    moveMsg.AddString("from", path);
+    moveMsg.AddString("to", uniqueTrashPath);
+    moveMsg.AddBool("undo_replay", true); // prevent individual undo recording
+
+    // Execute the file move synchronously
+    fWindow->fLibraryController->HandleFileMove(&moveMsg);
+
+    // Record for Undo/Redo
+    BMessage u(MSG_FILE_MOVE);
+    u.AddString("from", uniqueTrashPath);
+    u.AddString("to", path);
+    undoMsgs.push_back(u);
+
+    BMessage r(MSG_FILE_MOVE);
+    r.AddString("from", path);
+    r.AddString("to", uniqueTrashPath);
+    redoMsgs.push_back(r);
+  }
+
+  // 3. Compute after paths of the playlist (remove selected ones)
+  std::vector<BString> afterPaths;
+  for (const auto &p : beforePaths) {
+    if (std::find(selectedPaths.begin(), selectedPaths.end(), p) == selectedPaths.end()) {
+      afterPaths.push_back(p);
+    }
+  }
+
+  // Save the new playlist on disk
+  fWindow->fPlaylistLibrary->SavePlaylist(fWindow->fCurrentPlaylistName, afterPaths);
+  
+  // Refresh the active ColumnView
+  int32 selected = fWindow->fPlaylistLibrary->View()->CurrentSelection();
+  if (selected >= 0) {
+    BMessage selMsg(MSG_PLAYLIST_SELECTION);
+    selMsg.AddInt32("index", selected);
+    selMsg.AddString("name", fWindow->fCurrentPlaylistName);
+    fWindow->fPlaylistSelectionController->HandlePlaylistSelection(&selMsg);
+  }
+
+  // 4. Record playlist changes
+  BMessage uPlaylist(MSG_RESTORE_PLAYLIST_PATHS);
+  uPlaylist.AddString("playlist", fWindow->fCurrentPlaylistName);
+  for (const auto &p : beforePaths) {
+    uPlaylist.AddString("paths", p);
+  }
+  undoMsgs.push_back(uPlaylist);
+
+  BMessage rPlaylist(MSG_RESTORE_PLAYLIST_PATHS);
+  rPlaylist.AddString("playlist", fWindow->fCurrentPlaylistName);
+  for (const auto &p : afterPaths) {
+    rPlaylist.AddString("paths", p);
+  }
+  redoMsgs.push_back(rPlaylist);
+
+  // 5. Register with UndoManager
+  if (fWindow->fUndoManager) {
+    fWindow->fUndoManager->RecordAction(undoMsgs, redoMsgs);
+  }
+
+  BString statusMsg;
+  statusMsg.SetToFormat(B_TRANSLATE("Moved %zu items to Trash."), selectedPaths.size());
+  fWindow->UpdateStatus(statusMsg);
+}
+
+void PlaylistEditController::RestorePlaylistPaths(BMessage *msg) {
+  BString playlistName;
+  if (msg->FindString("playlist", &playlistName) != B_OK || playlistName.IsEmpty())
+    return;
+
+  std::vector<BString> paths;
+  BString path;
+  for (int32 i = 0; msg->FindString("paths", i, &path) == B_OK; ++i) {
+    paths.push_back(path);
+  }
+
+  fWindow->fPlaylistLibrary->SavePlaylist(playlistName, paths);
+
+  if (playlistName == fWindow->fCurrentPlaylistName) {
+    int32 selected = fWindow->fPlaylistLibrary->View()->FindIndexByName(playlistName);
+    if (selected >= 0) {
+      BMessage selMsg(MSG_PLAYLIST_SELECTION);
+      selMsg.AddInt32("index", selected);
+      selMsg.AddString("name", playlistName);
+      if (fWindow->Lock()) {
+        fWindow->fPlaylistSelectionController->HandlePlaylistSelection(&selMsg);
+        fWindow->Unlock();
+      }
+    }
+  }
+}
+
+void PlaylistEditController::CreatePlaylistWithPaths(BMessage *msg) {
+  BString playlistName;
+  if (msg->FindString("playlist", &playlistName) != B_OK || playlistName.IsEmpty())
+    return;
+
+  std::vector<BString> paths;
+  BString path;
+  for (int32 i = 0; msg->FindString("paths", i, &path) == B_OK; ++i) {
+    paths.push_back(path);
+  }
+
+  fWindow->fPlaylistLibrary->CreateNewPlaylist(playlistName);
+  fWindow->fPlaylistLibrary->SavePlaylist(playlistName, paths);
+  fWindow->fPlaylistLibrary->View()->SelectByName(playlistName);
+}
+
+void PlaylistEditController::DeletePlaylistByName(BMessage *msg) {
+  BString playlistName;
+  if (msg->FindString("playlist", &playlistName) != B_OK || playlistName.IsEmpty())
+    return;
+
+  fWindow->fPlaylistLibrary->DeletePlaylist(playlistName);
+  int32 index = fWindow->fPlaylistLibrary->View()->FindIndexByName(playlistName);
+  if (index >= 0) {
+    fWindow->fPlaylistLibrary->View()->RemovePlaylistAt(index);
+  }
+
+  if (playlistName == fWindow->fCurrentPlaylistName) {
+    if (fWindow->fPlaylistLibrary->View()->CountItems() > 0) {
+      fWindow->fPlaylistLibrary->View()->Select(0);
+      fWindow->fPlaylistLibrary->View()->SelectionChanged(0);
+    }
   }
 }
 

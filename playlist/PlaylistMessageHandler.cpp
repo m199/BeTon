@@ -35,6 +35,26 @@ bool PlaylistMessageHandler::HandleMessage(BMessage *msg) {
     break;
   }
 
+  case MSG_MOVE_TO_TRASH: {
+    fWindow->fPlaylistEditController->MoveSelectedItemsToTrash();
+    break;
+  }
+
+  case MSG_RESTORE_PLAYLIST_PATHS: {
+    fWindow->fPlaylistEditController->RestorePlaylistPaths(msg);
+    break;
+  }
+
+  case MSG_CREATE_PLAYLIST_WITH_PATHS: {
+    fWindow->fPlaylistEditController->CreatePlaylistWithPaths(msg);
+    break;
+  }
+
+  case MSG_DELETE_PLAYLIST_BY_NAME: {
+    fWindow->fPlaylistEditController->DeletePlaylistByName(msg);
+    break;
+  }
+
   case B_SIMPLE_DATA: {
     fWindow->fPlaylistEditController->HandlePlaylistDrop(msg);
     break;

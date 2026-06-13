@@ -27,6 +27,10 @@ public:
   void ReplyWithPlaylistNames(BMessage *msg);
   void HandlePlaylistFolderSelected(BMessage *msg);
   void DeleteSelectedPlaylistItems();
+  void MoveSelectedItemsToTrash();
+  void RestorePlaylistPaths(BMessage *msg);
+  void CreatePlaylistWithPaths(BMessage *msg);
+  void DeletePlaylistByName(BMessage *msg);
 
 private:
   MainWindow *fWindow;
