@@ -862,8 +862,14 @@ void PlaylistEditController::MoveSelectedItemsToTrash() {
     if (testEntry.Exists()) {
       BString nameStr(leafName);
       int32 extIdx = nameStr.FindLast('.');
-      BString base = (extIdx != B_ERROR) ? nameStr.Left(extIdx) : nameStr;
-      BString ext = (extIdx != B_ERROR) ? nameStr.Substring(extIdx) : "";
+      BString base;
+      BString ext;
+      if (extIdx != B_ERROR) {
+        nameStr.CopyInto(base, 0, extIdx);
+        nameStr.CopyInto(ext, extIdx, nameStr.Length() - extIdx);
+      } else {
+        base = nameStr;
+      }
       int32 counter = 1;
       do {
         BString newLeafName;
