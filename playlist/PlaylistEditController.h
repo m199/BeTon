@@ -28,6 +28,9 @@ public:
   void HandlePlaylistFolderSelected(BMessage *msg);
   void DeleteSelectedPlaylistItems();
   void MoveSelectedItemsToTrash();
+  void SelectMoveToFolder();
+  void HandleMoveToFolderSelected(BMessage *msg);
+  void MoveSelectedItemsTo(const entry_ref *targetDirRef);
   void RestorePlaylistPaths(BMessage *msg);
   void CreatePlaylistWithPaths(BMessage *msg);
   void DeletePlaylistByName(BMessage *msg);

@@ -107,6 +107,8 @@
 #define MSG_REORDER_PLAYLIST 'rord'         ///< Reorder items in playlist.
 #define MSG_PLAYLIST_ORDER_CHANGED 'plOC'   ///< Playlist sidebar order changed.
 #define MSG_MOVE_TO_TRASH 'mvtr'            ///< Move selection to Trash and remove from playlist.
+#define MSG_MOVE_TO 'mvto'                  ///< Prompt directory to move selected files to.
+#define MSG_MOVE_TO_FOLDER_SELECTED 'mtfs'  ///< Folder picked for Move To.
 #define MSG_RESTORE_PLAYLIST_PATHS 'rplp'    ///< Revert/restore playlist tracks.
 #define MSG_CREATE_PLAYLIST_WITH_PATHS 'cplp' ///< Create playlist and populate paths.
 #define MSG_DELETE_PLAYLIST_BY_NAME 'dpln'    ///< Delete playlist by name.

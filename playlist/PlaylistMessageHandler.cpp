@@ -40,6 +40,16 @@ bool PlaylistMessageHandler::HandleMessage(BMessage *msg) {
     break;
   }
 
+  case MSG_MOVE_TO: {
+    fWindow->fPlaylistEditController->SelectMoveToFolder();
+    break;
+  }
+
+  case MSG_MOVE_TO_FOLDER_SELECTED: {
+    fWindow->fPlaylistEditController->HandleMoveToFolderSelected(msg);
+    break;
+  }
+
   case MSG_RESTORE_PLAYLIST_PATHS: {
     fWindow->fPlaylistEditController->RestorePlaylistPaths(msg);
     break;
