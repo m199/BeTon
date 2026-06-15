@@ -1,0 +1,9 @@
+# Haiku/BeOS sources use LF and the build machine is Haiku. Keep text files as
+# LF in the repository and the working tree on every platform, regardless of
+# git's core.autocrlf setting.
+* text=auto eol=lf
+
+# Binary resources must never be line-ending converted.
+*.rsrc binary
+*.png binary
+*.hpkg binary
