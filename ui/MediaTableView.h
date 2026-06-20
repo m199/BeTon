@@ -101,7 +101,12 @@ public:
    * When disabled, clicking a selected row neither opens the cell
    * editor nor registers rating-star clicks.
    */
-  void SetFastEditEnabled(bool enabled) { fFastEditEnabled = enabled; }
+  void SetFastEditEnabled(bool enabled) {
+    if (fFastEditEnabled != enabled) {
+      fFastEditEnabled = enabled;
+      Invalidate();
+    }
+  }
   bool FastEditEnabled() const { return fFastEditEnabled; }
 
   void SaveState(BMessage *msg);

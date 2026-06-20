@@ -420,7 +420,19 @@ public:
       parent->SetFont(&boldFont);
     }
 
-    if (isGray) {
+    if (fOwner && fOwner->FastEditEnabled()) {
+      rgb_color bg = fOwner->Color(B_COLOR_BACKGROUND);
+      if (bg.red == 0 && bg.green == 0 && bg.blue == 0 && bg.alpha == 0) {
+        parent->SetHighColor(255, 0, 0, 255);
+      } else {
+        float brightness = (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f);
+        if (brightness < 128.0f) {
+          parent->SetHighColor(255, 182, 193, 255);
+        } else {
+          parent->SetHighColor(139, 0, 0, 255);
+        }
+      }
+    } else if (isGray) {
       parent->SetHighColor(tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
                                       B_DISABLED_LABEL_TINT));
     }
@@ -449,10 +461,12 @@ class StatusIntegerColumn : public BIntegerColumn {
 public:
   StatusIntegerColumn(const char *title, float width, float minWidth,
                       float maxWidth, const char *attrName = nullptr,
-                      alignment align = B_ALIGN_LEFT)
+                      alignment align = B_ALIGN_LEFT,
+                      MediaTableView *owner = nullptr)
       : BIntegerColumn(title, width, minWidth, maxWidth, align),
-        fAttrName(attrName), fTitle(title) {}
+        fAttrName(attrName), fOwner(owner), fTitle(title) {}
 
+  void SetOwner(MediaTableView *owner) { fOwner = owner; }
   const char *Title() const { return fTitle.String(); }
 
   int CompareFields(BField *field1, BField *field2) override {
@@ -481,7 +495,19 @@ public:
      * External changes will be detected via Node Monitoring (TODO).
      */
 
-    if (isGray) {
+    if (fOwner && fOwner->FastEditEnabled()) {
+      rgb_color bg = fOwner->Color(B_COLOR_BACKGROUND);
+      if (bg.red == 0 && bg.green == 0 && bg.blue == 0 && bg.alpha == 0) {
+        parent->SetHighColor(255, 0, 0, 255);
+      } else {
+        float brightness = (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f);
+        if (brightness < 128.0f) {
+          parent->SetHighColor(255, 182, 193, 255);
+        } else {
+          parent->SetHighColor(139, 0, 0, 255);
+        }
+      }
+    } else if (isGray) {
       parent->SetHighColor(tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
                                       B_DISABLED_LABEL_TINT));
     }
@@ -498,6 +524,7 @@ private:
   }
 
   BString fAttrName;
+  MediaTableView *fOwner = nullptr;
   BString fTitle;
 };
 
@@ -507,11 +534,13 @@ private:
  */
 class RatingColumn : public BStringColumn {
 public:
-  RatingColumn(const char *title, float width, float minWidth, float maxWidth)
+  RatingColumn(const char *title, float width, float minWidth, float maxWidth,
+               MediaTableView *owner = nullptr)
       : BStringColumn(title, width, minWidth, maxWidth, B_TRUNCATE_END,
                       B_ALIGN_LEFT),
-        fTitle(title) {}
+        fOwner(owner), fTitle(title) {}
 
+  void SetOwner(MediaTableView *owner) { fOwner = owner; }
   const char *Title() const { return fTitle.String(); }
 
   /**
@@ -557,12 +586,30 @@ public:
     BFont oldFont;
     parent->GetFont(&oldFont);
 
+    rgb_color oldColor = parent->HighColor();
+
+    if (fOwner && fOwner->FastEditEnabled()) {
+      rgb_color bg = fOwner->Color(B_COLOR_BACKGROUND);
+      if (bg.red == 0 && bg.green == 0 && bg.blue == 0 && bg.alpha == 0) {
+        parent->SetHighColor(255, 0, 0, 255);
+      } else {
+        float brightness = (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f);
+        if (brightness < 128.0f) {
+          parent->SetHighColor(255, 182, 193, 255);
+        } else {
+          parent->SetHighColor(139, 0, 0, 255);
+        }
+      }
+    }
+
     BStringColumn::DrawField(field, rect, parent);
 
+    parent->SetHighColor(oldColor);
     parent->SetFont(&oldFont);
   }
 
 private:
+  MediaTableView *fOwner = nullptr;
   BString fTitle;
 };
 
@@ -652,6 +699,10 @@ MediaTableView::MediaTableView(const char *name)
 
   for (int32 i = 0; i < CountColumns(); ++i) {
     if (auto *col = dynamic_cast<StatusStringColumn *>(ColumnAt(i))) {
+      col->SetOwner(this);
+    } else if (auto *col = dynamic_cast<StatusIntegerColumn *>(ColumnAt(i))) {
+      col->SetOwner(this);
+    } else if (auto *col = dynamic_cast<RatingColumn *>(ColumnAt(i))) {
       col->SetOwner(this);
     }
     if (auto *col = ColumnAt(i)) {
