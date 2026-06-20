@@ -1557,11 +1557,13 @@ void MediaTableView::MessageReceived(BMessage *msg) {
         }
         menu.AddItem(new BMenuItem(B_TRANSLATE("Remove from Playlist"),
                                    new BMessage(MSG_DELETE_ITEM)));
-        menu.AddItem(new BMenuItem(B_TRANSLATE("Move To..."),
-                                   new BMessage(MSG_MOVE_TO)));
-        menu.AddItem(new BMenuItem(B_TRANSLATE("Move to Trash"),
-                                   new BMessage(MSG_MOVE_TO_TRASH)));
       }
+
+      menu.AddSeparatorItem();
+      menu.AddItem(new BMenuItem(B_TRANSLATE("Move File To..."),
+                                 new BMessage(MSG_MOVE_TO)));
+      menu.AddItem(new BMenuItem(B_TRANSLATE("Move File To Trash"),
+                                 new BMessage(MSG_MOVE_TO_TRASH)));
 
       menu.AddSeparatorItem();
       menu.AddItem(new BMenuItem(B_TRANSLATE("Properties..."),
