@@ -2026,6 +2026,7 @@ void MediaTableView::StartCellEdit(BRow *row, BColumn *column, int32 colIdx, flo
 
   editor->MakeFocus(true);
   if (editor->TextView()) {
+    editor->TextView()->SelectAll();
     if (fFastEditEnabled) {
       rgb_color textColor;
       rgb_color bg = Color(B_COLOR_BACKGROUND);
@@ -2041,7 +2042,6 @@ void MediaTableView::StartCellEdit(BRow *row, BColumn *column, int32 colIdx, flo
       }
       editor->TextView()->SetFontAndColor(be_plain_font, B_FONT_ALL, &textColor);
     }
-    editor->TextView()->SelectAll();
   }
 }
 

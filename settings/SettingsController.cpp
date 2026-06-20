@@ -79,6 +79,7 @@ void SettingsController::SaveSettingsToMessage(BMessage &state) {
                    fWindow->fPlaybackQueueManager->RepeatModeValue());
   }
   state.AddBool("show_tooltips", fWindow->fShowTooltips);
+  state.AddBool("fast_edit_enabled", fWindow->fFastEditEnabled);
 
   if (fWindow->fIsMuted) {
     state.AddInt32("volume_level", (int32)fWindow->fPreMuteVolume);
@@ -228,6 +229,14 @@ void SettingsController::LoadSettingsFromMessage(BMessage &state) {
         fWindow->fBtnShuffle->SetToolTip("Shuffle");
       if (fWindow->fBtnRepeat)
         fWindow->fBtnRepeat->SetToolTip("Repeat");
+    }
+  }
+
+  if (state.FindBool("fast_edit_enabled", &fWindow->fFastEditEnabled) == B_OK) {
+    if (fWindow->fFastEditItem)
+      fWindow->fFastEditItem->SetMarked(fWindow->fFastEditEnabled);
+    if (fWindow->fLibraryManager && fWindow->fLibraryManager->ContentView()) {
+      fWindow->fLibraryManager->ContentView()->SetFastEditEnabled(fWindow->fFastEditEnabled);
     }
   }
 
