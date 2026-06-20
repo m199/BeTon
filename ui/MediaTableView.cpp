@@ -420,7 +420,8 @@ public:
       parent->SetFont(&boldFont);
     }
 
-    if (fOwner && fOwner->FastEditEnabled()) {
+    bool isEditable = fOwner && fOwner->FastEditEnabled() && (fOwner->FieldNameForColumn(LogicalFieldNum()) != nullptr);
+    if (isEditable) {
       rgb_color bg = fOwner->Color(B_COLOR_BACKGROUND);
       if (bg.red == 0 && bg.green == 0 && bg.blue == 0 && bg.alpha == 0) {
         parent->SetHighColor(255, 0, 0, 255);
@@ -495,7 +496,8 @@ public:
      * External changes will be detected via Node Monitoring (TODO).
      */
 
-    if (fOwner && fOwner->FastEditEnabled()) {
+    bool isEditable = fOwner && fOwner->FastEditEnabled() && (fOwner->FieldNameForColumn(LogicalFieldNum()) != nullptr);
+    if (isEditable) {
       rgb_color bg = fOwner->Color(B_COLOR_BACKGROUND);
       if (bg.red == 0 && bg.green == 0 && bg.blue == 0 && bg.alpha == 0) {
         parent->SetHighColor(255, 0, 0, 255);
@@ -588,7 +590,8 @@ public:
 
     rgb_color oldColor = parent->HighColor();
 
-    if (fOwner && fOwner->FastEditEnabled()) {
+    bool isEditable = fOwner && fOwner->FastEditEnabled() && (fOwner->FieldNameForColumn(LogicalFieldNum()) != nullptr);
+    if (isEditable) {
       rgb_color bg = fOwner->Color(B_COLOR_BACKGROUND);
       if (bg.red == 0 && bg.green == 0 && bg.blue == 0 && bg.alpha == 0) {
         parent->SetHighColor(255, 0, 0, 255);
