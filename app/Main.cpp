@@ -1,5 +1,6 @@
 #include "Debug.h"
 #include "MainWindow.h"
+#include "Messages.h"
 #include <Application.h>
 #include <Catalog.h>
 #include <cstring>
@@ -23,6 +24,31 @@ public:
   void ReadyToRun() override {
     MainWindow *window = new MainWindow();
     window->Show();
+  }
+
+  void MessageReceived(BMessage *msg) override {
+    switch (msg->what) {
+      case MSG_PLAYPAUSE:
+      case MSG_PLAY:
+      case MSG_PAUSE:
+      case MSG_STOP:
+      case MSG_PLAY_NEXT:
+      case MSG_PREV_SONG: {
+        for (int32 i = 0; ; ++i) {
+          BWindow *win = WindowAt(i);
+          if (!win)
+            break;
+          if (dynamic_cast<MainWindow *>(win)) {
+            win->PostMessage(msg);
+            break;
+          }
+        }
+        break;
+      }
+      default:
+        BApplication::MessageReceived(msg);
+        break;
+    }
   }
 };
 
