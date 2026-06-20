@@ -1357,6 +1357,7 @@ void MediaTableView::AttachedToWindow() {
     outline->SetViewColor(B_TRANSPARENT_COLOR);
   }
   Window()->AddShortcut('a', B_COMMAND_KEY, new BMessage(kMsgSelectAll), this);
+  Window()->AddShortcut('l', B_COMMAND_KEY, new BMessage(kMsgLocatePlaying), this);
 }
 
 /**
@@ -1364,6 +1365,7 @@ void MediaTableView::AttachedToWindow() {
  */
 void MediaTableView::DetachedFromWindow() {
   Window()->RemoveShortcut('a', B_COMMAND_KEY);
+  Window()->RemoveShortcut('l', B_COMMAND_KEY);
   BColumnListView::DetachedFromWindow();
 }
 
@@ -1642,6 +1644,11 @@ void MediaTableView::MessageReceived(BMessage *msg) {
     for (int32 i = 0; i < CountRows(); ++i)
       if (BRow *row = RowAt(i))
         AddToSelection(row);
+    break;
+  }
+
+  case kMsgLocatePlaying: {
+    LocatePlayingTrack();
     break;
   }
 
@@ -2191,4 +2198,19 @@ const char *MediaTableView::FieldNameForColumn(int32 colIdx) const {
 
 BView* MediaTableView::ActiveEditor() const {
   return fActiveEditor;
+}
+
+void MediaTableView::LocatePlayingTrack() {
+  if (fNowPlayingPath.IsEmpty())
+    return;
+
+  for (int32 i = 0; i < CountRows(); ++i) {
+    MediaRow *mr = dynamic_cast<MediaRow *>(RowAt(i));
+    if (mr && mr->Item().path == fNowPlayingPath) {
+      DeselectAll();
+      AddToSelection(mr);
+      ScrollTo(mr);
+      break;
+    }
+  }
 }

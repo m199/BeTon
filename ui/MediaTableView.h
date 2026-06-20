@@ -92,9 +92,11 @@ public:
   static constexpr uint32 MSG_COMMIT_EDIT = 'cmed';
   static constexpr uint32 MSG_CANCEL_EDIT = 'cned';
   static constexpr uint32 kMsgSelectAll   = 'sall';
+  static constexpr uint32 kMsgLocatePlaying = 'locp';
 
   bool HasActiveEditor() const { return fActiveEditor != nullptr; }
   BView* ActiveEditor() const;
+  void LocatePlayingTrack();
 
   /**
    * @brief Enables or disables inline cell editing ("Fast Edit").
