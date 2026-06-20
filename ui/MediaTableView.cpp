@@ -213,44 +213,6 @@ public:
         if (column && row && fOwner->fFastEditEnabled) {
           MediaRow *mr = dynamic_cast<MediaRow *>(row);
           if (mr) {
-            if (colIdx == 11) {
-              float xInCol = where.x - colLeft;
-              float starWidth = be_plain_font->StringWidth("★★★★★") / 5.0f;
-              float xInStars = xInCol - 16.0f; // 16px total margin (cell padding + BStringColumn margin)
-              if (starWidth > 0.0f) {
-                int32 rating = 0;
-                if (xInStars >= 0.0f) {
-                  int32 star = (int32)(xInStars / starWidth);
-                  star = std::max((int32)0, std::min((int32)4, star));
-                  float xInStar = xInStars - (starWidth * star);
-                  rating = star * 2 + (xInStar < starWidth / 2.0f ? 1 : 2);
-                }
-
-                int32 currentRating = mr->Item().rating;
-                if (rating == currentRating) {
-                  rating = 0;
-                }
-
-                DEBUG_PRINT("Rating click: xInCol=%.1f, xInStars=%.1f, starWidth=%.1f, rating=%d\n",
-                            xInCol, xInStars, starWidth, (int)rating);
-
-                BMessage setRatingMsg(MSG_SET_RATING);
-                setRatingMsg.AddInt32("rating", rating);
-
-                BMessage filesMsg;
-                entry_ref ref;
-                if (get_ref_for_path(mr->Item().path.String(), &ref) == B_OK) {
-                  filesMsg.AddRef("refs", &ref);
-                }
-                setRatingMsg.AddMessage("files", &filesMsg);
-
-                if (fOwner->Window()) {
-                  fOwner->Window()->PostMessage(&setRatingMsg);
-                }
-                return B_SKIP_MESSAGE;
-              }
-            }
-
             BString path = mr->Item().path;
             bool isRemote = path.StartsWith("http://") || path.StartsWith("https://") || path.StartsWith("dlna://");
             if (!isRemote && fOwner->FieldNameForColumn(colIdx) != nullptr) {
@@ -1214,6 +1176,14 @@ void MediaTableView::KeyDown(const char *bytes, int32 numBytes) {
     return;
   }
 
+  if (numBytes == 1 && bytes[0] == B_SPACE) {
+    BMessage msg(MSG_PLAYPAUSE);
+    if (Window()) {
+      Window()->PostMessage(&msg);
+    }
+    return;
+  }
+
   if (numBytes == 1) {
     uint32 modifiers = 0;
     BMessage *currentMsg = Window() ? Window()->CurrentMessage() : nullptr;
@@ -1235,6 +1205,68 @@ void MediaTableView::KeyDown(const char *bytes, int32 numBytes) {
         if (row) {
           msg.AddInt32("index", IndexOf(row));
           Looper()->PostMessage(&msg);
+        }
+        return;
+      }
+    } else {
+      if (bytes[0] == B_UP_ARROW) {
+        BRow *row = CurrentSelection();
+        int32 index = row ? IndexOf(row) : -1;
+        int32 targetIndex = -1;
+        if (index > 0) {
+          targetIndex = index - 1;
+        } else if (index == -1 && CountRows() > 0) {
+          targetIndex = CountRows() - 1;
+        }
+        if (targetIndex != -1) {
+          BRow *targetRow = RowAt(targetIndex);
+          DeselectAll();
+          AddToSelection(targetRow);
+          ScrollTo(targetRow);
+        }
+        return;
+      } else if (bytes[0] == B_DOWN_ARROW) {
+        BRow *row = CurrentSelection();
+        int32 index = row ? IndexOf(row) : -1;
+        int32 targetIndex = -1;
+        if (index < CountRows() - 1) {
+          targetIndex = index >= 0 ? index + 1 : 0;
+        } else if (index == -1 && CountRows() > 0) {
+          targetIndex = 0;
+        }
+        if (targetIndex != -1) {
+          BRow *targetRow = RowAt(targetIndex);
+          DeselectAll();
+          AddToSelection(targetRow);
+          ScrollTo(targetRow);
+        }
+        return;
+      } else if (bytes[0] == B_LEFT_ARROW || bytes[0] == B_RIGHT_ARROW) {
+        BRow *selRow = CurrentSelection();
+        if (selRow) {
+          MediaRow *mr = dynamic_cast<MediaRow *>(selRow);
+          if (mr) {
+            int32 currentRating = mr->Item().rating;
+            int32 newRating = currentRating;
+            if (bytes[0] == B_LEFT_ARROW) {
+              newRating = std::max((int32)0, currentRating - 1);
+            } else {
+              newRating = std::min((int32)10, currentRating + 1);
+            }
+            if (newRating != currentRating) {
+              BMessage setRatingMsg(MSG_SET_RATING);
+              setRatingMsg.AddInt32("rating", newRating);
+
+              BMessage filesMsg;
+              BuildFilesMessage(this, filesMsg);
+              if (filesMsg.HasRef("refs")) {
+                setRatingMsg.AddMessage("files", &filesMsg);
+                if (Window()) {
+                  Window()->PostMessage(&setRatingMsg);
+                }
+              }
+            }
+          }
         }
         return;
       }
@@ -1994,6 +2026,21 @@ void MediaTableView::StartCellEdit(BRow *row, BColumn *column, int32 colIdx, flo
 
   editor->MakeFocus(true);
   if (editor->TextView()) {
+    if (fFastEditEnabled) {
+      rgb_color textColor;
+      rgb_color bg = Color(B_COLOR_BACKGROUND);
+      if (bg.red == 0 && bg.green == 0 && bg.blue == 0 && bg.alpha == 0) {
+        textColor = (rgb_color){255, 0, 0, 255}; // Red if we can't determine
+      } else {
+        float brightness = (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f);
+        if (brightness < 128.0f) {
+          textColor = (rgb_color){255, 182, 193, 255}; // Light pink (dark bg)
+        } else {
+          textColor = (rgb_color){139, 0, 0, 255}; // Deep red (light bg)
+        }
+      }
+      editor->TextView()->SetFontAndColor(be_plain_font, B_FONT_ALL, &textColor);
+    }
     editor->TextView()->SelectAll();
   }
 }
