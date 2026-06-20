@@ -104,7 +104,10 @@ public:
   void SetFastEditEnabled(bool enabled) {
     if (fFastEditEnabled != enabled) {
       fFastEditEnabled = enabled;
-      Invalidate();
+      if (BView *outline = ScrollView())
+        outline->Invalidate();
+      else
+        Invalidate();
     }
   }
   bool FastEditEnabled() const { return fFastEditEnabled; }
