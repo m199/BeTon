@@ -103,6 +103,7 @@ private:
   void _SendMessageToTarget(uint32 what, BMessage *payload = nullptr);
   void _LoadInitialData();
   void _LoadInitialDataMulti();
+  void _ClearMusicBrainzResults(bool cancelPendingSearch);
   void _UpdateHeaderFromFields();
   void _SetRating(int32 rating, bool markDirty);
   void _UpdateRatingStars();

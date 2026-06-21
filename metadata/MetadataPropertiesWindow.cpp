@@ -1168,6 +1168,8 @@ void MetadataPropertiesWindow::_LoadFileAtIndex(int32 index) {
   if (index < 0 || index >= (int32)fFiles.size())
     return;
 
+  _ClearMusicBrainzResults(true);
+
   fCurrentIndex = index;
   fFilePath = fFiles[fCurrentIndex];
 
@@ -1179,6 +1181,26 @@ void MetadataPropertiesWindow::_LoadFileAtIndex(int32 index) {
   fBtnNext->SetEnabled(fCurrentIndex < (int32)fFiles.size() - 1);
 
   _UpdateReadOnlyState();
+}
+
+void MetadataPropertiesWindow::_ClearMusicBrainzResults(bool cancelPendingSearch) {
+  if (cancelPendingSearch && fMbCancel && fMbCancel->IsEnabled())
+    _SendMessageToTarget(MSG_MB_CANCEL, new BMessage(MSG_MB_CANCEL));
+
+  if (fMbCancel)
+    fMbCancel->SetEnabled(false);
+  if (fMbStatusView)
+    fMbStatusView->SetText(B_TRANSLATE("Ready."));
+  if (fMbResults)
+    fMbResults->MakeEmpty();
+
+  fMbCache.clear();
+  fMbAlbumResults = false;
+
+  if (fMbApplyTrack)
+    fMbApplyTrack->SetEnabled(false);
+  if (fMbApplyAlbum)
+    fMbApplyAlbum->SetEnabled(false);
 }
 
 void MetadataPropertiesWindow::_SetRating(int32 rating, bool markDirty) {
