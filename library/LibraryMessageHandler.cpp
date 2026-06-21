@@ -66,6 +66,11 @@ bool LibraryMessageHandler::HandleMessage(BMessage *msg) {
     break;
   }
 
+  case MSG_FILE_MOVE: {
+    fWindow->fLibraryController->HandleFileMove(msg);
+    break;
+  }
+
   case MSG_PLAYLIST_SELECTION:
   case MSG_INIT_LIBRARY: {
     if (fWindow->fPlaylistSelectionController)

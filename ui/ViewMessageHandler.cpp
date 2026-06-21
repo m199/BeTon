@@ -64,6 +64,11 @@ bool ViewMessageHandler::HandleMessage(BMessage *msg) {
     fWindow->fViewStateController->SetTooltipsEnabled(false);
     return true;
 
+  case MSG_TOGGLE_FAST_EDIT:
+    fWindow->fViewStateController->SetFastEditEnabled(
+        !fWindow->fFastEditEnabled);
+    return true;
+
   case B_COLORS_UPDATED:
     fWindow->fViewStateController->HandleColorsUpdated();
     return true;

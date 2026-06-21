@@ -115,6 +115,13 @@ public:
   void SetActiveItems(const std::vector<MediaItem> &items);
 
   /**
+   * @brief Replaces a path in the active scope after a file was moved.
+   * @param from Old absolute path.
+   * @param to New absolute path.
+   */
+  void RenameActivePath(const BString &from, const BString &to);
+
+  /**
    * @brief Checks if a specific file path is allowed in the current view mode.
    */
   bool IsPathAllowed(const BString &filePath, bool isLibraryMode) const;

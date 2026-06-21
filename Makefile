@@ -9,6 +9,7 @@ CXX = g++
 SRCS = \
     app/Main.cpp \
     app/MainWindow.cpp \
+    app/UndoManager.cpp \
     artwork/ArtworkController.cpp \
     dlna/DLNAMessageHandler.cpp \
     dlna/DLNAViewController.cpp \

@@ -62,6 +62,7 @@ class MetadataSyncConflictDialog;
 class MetadataSyncController;
 class ViewMessageHandler;
 class ViewStateController;
+class UndoManager;
 enum class PlaylistItemKind;
 
 /**
@@ -86,6 +87,8 @@ public:
   virtual ~MainWindow();
 
   void MessageReceived(BMessage *msg) override;
+  void WindowActivated(bool active) override;
+  void MenusBeginning() override;
 
   /** @name Helpers used by child windows/components */
   ///@{
@@ -125,6 +128,7 @@ public:
   ///@}
 
 private:
+  friend class WindowClickFilter;
   friend class ArtworkController;
   friend class DLNAMessageHandler;
   friend class DLNAViewController;
@@ -264,6 +268,13 @@ private:
   bool fShowTooltips = false;
   BMenuItem *fTooltipsOnItem = nullptr;
   BMenuItem *fTooltipsOffItem = nullptr;
+
+  bool fFastEditEnabled = false;
+  BMenuItem *fFastEditItem = nullptr;
+
+  UndoManager *fUndoManager{nullptr};
+  BMenuItem *fUndoItem = nullptr;
+  BMenuItem *fRedoItem = nullptr;
 
   bool fRadioEnabled = false;
   bool fDlnaEnabled = false;

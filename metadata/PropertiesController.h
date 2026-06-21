@@ -45,6 +45,12 @@ public:
   void SetRating(BMessage* msg);
 
 private:
+  /**
+   * @brief Records pre-save field values as an undo action.
+   * @param msg The pending MSG_PROP_SAVE message.
+   */
+  void _RecordUndoForPropertySave(BMessage* msg);
+
   /** @brief Owning main window and shared app state access. */
   MainWindow* fWindow;
 };

@@ -77,6 +77,11 @@
 #define MSG_SELECTION_COLOR_MATCH 'scmt'  ///< Match selection to SeekBar color.
 #define MSG_TOOLTIPS_ON 'tton'            ///< Enable tooltips.
 #define MSG_TOOLTIPS_OFF 'ttof'           ///< Disable tooltips.
+#define MSG_TOGGLE_FAST_EDIT 'tgfe'       ///< Toggle inline cell editing.
+#define MSG_FILE_MOVE 'fmov'              ///< Request file move ("from"/"to" paths).
+#define MSG_FILE_MOVED 'fmvd'             ///< File moved on disk; rekey cache entry.
+#define MSG_UNDO 'undo'                   ///< Undo the last edit action.
+#define MSG_REDO 'redo'                   ///< Redo the last undone action.
 #define MSG_VIEWS_REFRESH 'vwrf'          ///< Debounced view refresh trigger.
 #define MSG_VIEWS_REFRESH_PARTIAL 'vwrp'  ///< Refresh trigger for Filters.
 ///@}
@@ -101,7 +106,14 @@
 #define MSG_NAME_PROMPT_CANCEL 'cncl'       ///< Name entry cancelled.
 #define MSG_REORDER_PLAYLIST 'rord'         ///< Reorder items in playlist.
 #define MSG_PLAYLIST_ORDER_CHANGED 'plOC'   ///< Playlist sidebar order changed.
+#define MSG_MOVE_TO_TRASH 'mvtr'            ///< Move selection to Trash and remove from playlist.
+#define MSG_MOVE_TO 'mvto'                  ///< Prompt directory to move selected files to.
+#define MSG_MOVE_TO_FOLDER_SELECTED 'mtfs'  ///< Folder picked for Move To.
+#define MSG_RESTORE_PLAYLIST_PATHS 'rplp'    ///< Revert/restore playlist tracks.
+#define MSG_CREATE_PLAYLIST_WITH_PATHS 'cplp' ///< Create playlist and populate paths.
+#define MSG_DELETE_PLAYLIST_BY_NAME 'dpln'    ///< Delete playlist by name.
 ///@}
+
 
 /** @name Metadata & MusicBrainz */
 ///@{

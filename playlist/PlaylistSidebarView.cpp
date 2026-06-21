@@ -128,14 +128,10 @@ void PlaylistSidebarView::MessageReceived(BMessage *msg) {
       }
 
       BString playlistName = ItemAt(dropIndex);
-      entry_ref ref;
-      int32 i = 0;
-      while (msg->FindRef("refs", i++, &ref) == B_OK) {
-        BPath path(&ref);
-        DEBUG_PRINT("File '%s' → Playlist '%s'\n",
-                    path.Path(), playlistName.String());
-        AddFileToPlaylist(dropIndex, ref);
-      }
+      BMessage dropOnPlaylistMsg(B_SIMPLE_DATA);
+      dropOnPlaylistMsg.AddString("playlist", playlistName);
+      dropOnPlaylistMsg.AddMessage("files", msg);
+      fTarget.SendMessage(&dropOnPlaylistMsg);
     }
 
     SetHoverIndex(-1);

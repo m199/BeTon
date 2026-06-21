@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+class CellTextControl;
+
 /**
  * @class MediaTableView
  * @brief The main list view displaying the audio library.
@@ -77,8 +79,30 @@ public:
   /**
    * @brief Updates a single row in-place with new metadata without rebuilding the list.
    * @param mi The updated media item.
+   * @param matchPath Optional row key; rows are matched against this path
+   *                  instead of mi.path (used when the path itself changed).
    */
-  void UpdateItem(const MediaItem &mi);
+  void UpdateItem(const MediaItem &mi, const BString *matchPath = nullptr);
+
+  void StartCellEdit(BRow *row, BColumn *column, int32 colIdx, float colLeft, BView *targetView);
+  void CommitCellEdit();
+  void CancelCellEdit();
+  const char *FieldNameForColumn(int32 colIdx) const;
+
+  static constexpr uint32 MSG_COMMIT_EDIT = 'cmed';
+  static constexpr uint32 MSG_CANCEL_EDIT = 'cned';
+  static constexpr uint32 kMsgSelectAll   = 'sall';
+
+  bool HasActiveEditor() const { return fActiveEditor != nullptr; }
+  BView* ActiveEditor() const;
+
+  /**
+   * @brief Enables or disables inline cell editing ("Fast Edit").
+   * When disabled, clicking a selected row neither opens the cell
+   * editor nor registers rating-star clicks.
+   */
+  void SetFastEditEnabled(bool enabled) { fFastEditEnabled = enabled; }
+  bool FastEditEnabled() const { return fFastEditEnabled; }
 
   void SaveState(BMessage *msg);
   void LoadState(BMessage *msg);
@@ -156,6 +180,19 @@ private:
   bool fIsRadioMode{false};
   bool fIsPlaylistMode{false};
   std::vector<std::pair<int32, BColumn*>> fHiddenColumns; ///< Columns removed in radio mode
+  std::map<int32, bool> fUserColumnVisibility;
+  std::map<int32, BColumn*> fColumnByField; ///< All columns by field num, populated at construction
+  ///@}
+
+  /** @name Cell Inline Editing */
+  ///@{
+  bool fFastEditEnabled{false};
+  CellTextControl *fActiveEditor{nullptr};
+  BRow *fEditingRow{nullptr};
+  BColumn *fEditingColumn{nullptr};
+  int32 fEditingColIdx{-1};
+  BView *fEditingOutlineView{nullptr};
+  BString fEditingPathPrefix; ///< Volume mount point hidden from the path editor
   ///@}
 };
 

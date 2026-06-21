@@ -29,6 +29,7 @@
 #include "RadioStationController.h"
 #include "PlaybackSeekBarView.h"
 #include "SettingsController.h"
+#include "UndoManager.h"
 #include "StatusBarController.h"
 #include "SyncMessageHandler.h"
 #include "MetadataSyncConflictDialog.h"
@@ -195,10 +196,42 @@ bool MainWindow::_HandleAppCommandMessage(BMessage *msg) {
     break;
   }
 
+  case MSG_UNDO: {
+    MediaTableView *cv =
+        fLibraryManager ? fLibraryManager->ContentView() : nullptr;
+    if (cv && cv->HasActiveEditor()) {
+      // Let the inline text editor handle its own typing undo.
+      if (auto *tc = dynamic_cast<BTextControl *>(cv->ActiveEditor()))
+        PostMessage(B_UNDO, tc->TextView());
+      break;
+    }
+    if (fUndoManager)
+      fUndoManager->Undo();
+    break;
+  }
+
+  case MSG_REDO: {
+    MediaTableView *cv =
+        fLibraryManager ? fLibraryManager->ContentView() : nullptr;
+    if (cv && cv->HasActiveEditor())
+      break;
+    if (fUndoManager)
+      fUndoManager->Redo();
+    break;
+  }
+
   default:
     return false;
   }
   return true;
+}
+
+void MainWindow::MenusBeginning() {
+  BWindow::MenusBeginning();
+  if (fUndoItem)
+    fUndoItem->SetEnabled(fUndoManager && fUndoManager->CanUndo());
+  if (fRedoItem)
+    fRedoItem->SetEnabled(fUndoManager && fUndoManager->CanRedo());
 }
 
 void MainWindow::_HandleControlInvoked(BMessage *msg) {
@@ -285,6 +318,38 @@ MainWindow *gMainWindow = nullptr;
 
 extern void AddItemToPlaylist(const BString &playlist, const BString &path);
 
+class WindowClickFilter : public BMessageFilter {
+public:
+  explicit WindowClickFilter(MainWindow *window)
+      : BMessageFilter(B_ANY_DELIVERY, B_ANY_SOURCE, B_MOUSE_DOWN),
+        fWindow(window) {}
+
+  filter_result Filter(BMessage *msg, BHandler **target) override {
+    if (fWindow && msg->what == B_MOUSE_DOWN) {
+      if (fWindow->fLibraryManager && fWindow->fLibraryManager->ContentView()) {
+        MediaTableView *view = fWindow->fLibraryManager->ContentView();
+        if (view->HasActiveEditor()) {
+          BView *v = dynamic_cast<BView *>(*target);
+          bool clickOnEditor = false;
+          for (BView *p = v; p; p = p->Parent()) {
+            if (p == view->ActiveEditor()) {
+              clickOnEditor = true;
+              break;
+            }
+          }
+          if (!clickOnEditor) {
+            view->CommitCellEdit();
+          }
+        }
+      }
+    }
+    return B_DISPATCH_MESSAGE;
+  }
+
+private:
+  MainWindow *fWindow;
+};
+
 /**
  * @brief Constructs the Main Window of the application.
  *
@@ -338,6 +403,7 @@ MainWindow::MainWindow()
   fViewMessageHandler = new ViewMessageHandler(this);
   fSyncMessageHandler = new SyncMessageHandler(this);
   fMetadataSyncController = new MetadataSyncController(this);
+  fUndoManager = new UndoManager(this);
 
   fNowPlayingInfoPanel = new NowPlayingInfoPanel();
   fStatusLabel = new BStringView("status", B_TRANSLATE("Loading..."));
@@ -377,6 +443,8 @@ MainWindow::MainWindow()
     fDlnaController->RebuildRendererMenu();
   fLocalServer.Start();
 #endif
+
+  AddCommonFilter(new WindowClickFilter(this));
 }
 
 /**
@@ -436,6 +504,7 @@ MainWindow::~MainWindow() {
   delete fViewMessageHandler;
   delete fSyncMessageHandler;
   delete fMetadataSyncController;
+  delete fUndoManager;
   delete fMetadataService;
   delete fMbClient;
   delete fSearchRunner;
@@ -484,6 +553,21 @@ void MainWindow::_BuildUI() {
   fileMenu->AddItem(
       new BMenuItem(B_TRANSLATE("Quit"), new BMessage(B_QUIT_REQUESTED), 'q'));
   fMenuBar->AddItem(fileMenu);
+
+  BMenu *editMenu = new BMenu(B_TRANSLATE("Edit"));
+  fUndoItem = new BMenuItem(B_TRANSLATE("Undo"), new BMessage(MSG_UNDO), 'Z');
+  fRedoItem = new BMenuItem(B_TRANSLATE("Redo"), new BMessage(MSG_REDO), 'Z',
+                            B_SHIFT_KEY);
+  fUndoItem->SetEnabled(false);
+  fRedoItem->SetEnabled(false);
+  editMenu->AddItem(fUndoItem);
+  editMenu->AddItem(fRedoItem);
+  editMenu->AddSeparatorItem();
+  fFastEditItem = new BMenuItem(B_TRANSLATE("Enable Fast Edit"),
+                                new BMessage(MSG_TOGGLE_FAST_EDIT), 'E');
+  fFastEditItem->SetMarked(fFastEditEnabled);
+  editMenu->AddItem(fFastEditItem);
+  fMenuBar->AddItem(editMenu);
 
   BMenu *playlistMenu = new BMenu(B_TRANSLATE("Playlists"));
   playlistMenu->AddItem(new BMenuItem(B_TRANSLATE("New Playlist"),
@@ -762,6 +846,15 @@ void MainWindow::_BuildUI() {
       .AddGlue()
       .End()
       .End();
+}
+
+void MainWindow::WindowActivated(bool active) {
+  BWindow::WindowActivated(active);
+  if (!active) {
+    if (fLibraryManager && fLibraryManager->ContentView()) {
+      fLibraryManager->ContentView()->CommitCellEdit();
+    }
+  }
 }
 
 /**

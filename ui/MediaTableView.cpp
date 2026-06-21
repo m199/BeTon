@@ -2,11 +2,14 @@
 #include "MediaTableView.h"
 #include "MainWindow.h"
 #include "Messages.h"
+#include <ScrollBar.h>
 #include "MusicSourceSettings.h"
 #include "MetadataTagIO.h"
 #include <Catalog.h>
+#include <Directory.h>
 #include <Entry.h>
 #include <Font.h>
+#include <Volume.h>
 #include <Handler.h>
 #include <Looper.h>
 #include <MenuItem.h>
@@ -17,9 +20,12 @@
 #include <PopUpMenu.h>
 #include <View.h>
 #include <Window.h>
+#include <TextControl.h>
+#include <TextView.h>
 #include <algorithm>
 #include <cinttypes>
 #include <memory>
+#include <set>
 #include <unistd.h>
 
 #undef B_TRANSLATION_CONTEXT
@@ -86,6 +92,27 @@ public:
     BView *v = dynamic_cast<BView *>(*target);
     if (!v)
       return B_DISPATCH_MESSAGE;
+
+    // Exclude scrollbars
+    if (dynamic_cast<BScrollBar *>(v) != nullptr)
+      return B_DISPATCH_MESSAGE;
+
+    // Exclude the column header view
+    if (v->Name() && strcmp(v->Name(), "header") == 0)
+      return B_DISPATCH_MESSAGE;
+
+    // Exclude active editor or its children
+    if (fOwner->HasActiveEditor()) {
+      bool clickOnEditor = false;
+      for (BView *p = v; p; p = p->Parent()) {
+        if (p == fOwner->ActiveEditor()) {
+          clickOnEditor = true;
+          break;
+        }
+      }
+      if (clickOnEditor)
+        return B_DISPATCH_MESSAGE;
+    }
 
     bool inside = false;
     for (BView *p = v; p; p = p->Parent()) {
@@ -167,6 +194,71 @@ public:
           snooze(10000);
           v->GetMouse(&p, &btns);
         }
+
+        BColumn *column = nullptr;
+        float colLeft = 16.0f;
+        int32 colIdx = -1;
+        for (int32 i = 0; i < fOwner->CountColumns(); ++i) {
+          BColumn *c = fOwner->ColumnAt(i);
+          if (!c->IsVisible())
+            continue;
+          if (where.x >= colLeft && where.x < colLeft + c->Width()) {
+            column = c;
+            colIdx = c->LogicalFieldNum();
+            break;
+          }
+          colLeft += c->Width();
+        }
+
+        if (column && row && fOwner->fFastEditEnabled) {
+          MediaRow *mr = dynamic_cast<MediaRow *>(row);
+          if (mr) {
+            if (colIdx == 11) {
+              float xInCol = where.x - colLeft;
+              float starWidth = be_plain_font->StringWidth("★★★★★") / 5.0f;
+              float xInStars = xInCol - 16.0f; // 16px total margin (cell padding + BStringColumn margin)
+              if (starWidth > 0.0f) {
+                int32 rating = 0;
+                if (xInStars >= 0.0f) {
+                  int32 star = (int32)(xInStars / starWidth);
+                  star = std::max((int32)0, std::min((int32)4, star));
+                  float xInStar = xInStars - (starWidth * star);
+                  rating = star * 2 + (xInStar < starWidth / 2.0f ? 1 : 2);
+                }
+
+                int32 currentRating = mr->Item().rating;
+                if (rating == currentRating) {
+                  rating = 0;
+                }
+
+                DEBUG_PRINT("Rating click: xInCol=%.1f, xInStars=%.1f, starWidth=%.1f, rating=%d\n",
+                            xInCol, xInStars, starWidth, (int)rating);
+
+                BMessage setRatingMsg(MSG_SET_RATING);
+                setRatingMsg.AddInt32("rating", rating);
+
+                BMessage filesMsg;
+                entry_ref ref;
+                if (get_ref_for_path(mr->Item().path.String(), &ref) == B_OK) {
+                  filesMsg.AddRef("refs", &ref);
+                }
+                setRatingMsg.AddMessage("files", &filesMsg);
+
+                if (fOwner->Window()) {
+                  fOwner->Window()->PostMessage(&setRatingMsg);
+                }
+                return B_SKIP_MESSAGE;
+              }
+            }
+
+            BString path = mr->Item().path;
+            bool isRemote = path.StartsWith("http://") || path.StartsWith("https://") || path.StartsWith("dlna://");
+            if (!isRemote && fOwner->FieldNameForColumn(colIdx) != nullptr) {
+              fOwner->StartCellEdit(row, column, colIdx, colLeft, v);
+              return B_SKIP_MESSAGE;
+            }
+          }
+        }
       }
     }
 
@@ -195,8 +287,13 @@ public:
     if (!fOwner || !msg || msg->what != B_SIMPLE_DATA)
       return B_DISPATCH_MESSAGE;
 
-    if (fOwner->fDragSourceIndex < 0)
+    if (fOwner->fDragSourceIndex < 0) {
+      if (msg->HasRef("refs") && fOwner->Looper()) {
+        fOwner->Looper()->PostMessage(msg);
+        return B_SKIP_MESSAGE;
+      }
       return B_DISPATCH_MESSAGE;
+    }
 
     BView *v = dynamic_cast<BView *>(*target);
     if (!v)
@@ -507,6 +604,35 @@ private:
   BString fTitle;
 };
 
+class CellTextControl : public BTextControl {
+public:
+  CellTextControl(BRect frame, const char *name, const char *text, BMessage *message, BMessenger target)
+      : BTextControl(frame, name, nullptr, text, message), fTarget(target) {
+    SetFlags(Flags() | B_NAVIGABLE);
+  }
+
+  void MakeFocus(bool focused) override {
+    BTextControl::MakeFocus(focused);
+    if (!focused) {
+      BMessage msg(MediaTableView::MSG_COMMIT_EDIT);
+      msg.AddBool("focus_loss", true);
+      fTarget.SendMessage(&msg);
+    }
+  }
+
+  void KeyDown(const char *bytes, int32 numBytes) override {
+    if (numBytes == 1 && bytes[0] == B_ESCAPE) {
+      BMessage msg(MediaTableView::MSG_CANCEL_EDIT);
+      fTarget.SendMessage(&msg);
+      return;
+    }
+    BTextControl::KeyDown(bytes, numBytes);
+  }
+
+private:
+  BMessenger fTarget;
+};
+
 /**
  * @brief Constructor for the MediaTableView.
  * @param name The name of the view.
@@ -566,6 +692,11 @@ MediaTableView::MediaTableView(const char *name)
     if (auto *col = dynamic_cast<StatusStringColumn *>(ColumnAt(i))) {
       col->SetOwner(this);
     }
+    if (auto *col = ColumnAt(i)) {
+      int32 field = col->LogicalFieldNum();
+      fUserColumnVisibility[field] = true;
+      fColumnByField[field] = col;
+    }
   }
 }
 
@@ -600,6 +731,18 @@ void MediaTableView::SetNowPlayingPath(const BString &path) {
  * @param radio True for radio layout, false for library layout.
  */
 void MediaTableView::SetRadioMode(bool radio) {
+  if (fIsRadioMode == radio)
+    return;
+
+  // Save current visibility state of columns if leaving standard mode
+  if (!fIsRadioMode) {
+    for (int32 i = 0; i < CountColumns(); ++i) {
+      if (BColumn *col = ColumnAt(i)) {
+        fUserColumnVisibility[col->LogicalFieldNum()] = col->IsVisible();
+      }
+    }
+  }
+
   fIsRadioMode = radio;
 
   static const int32 kRadioFields[] = {0, 1, 2, 4, 10};
@@ -622,7 +765,11 @@ void MediaTableView::SetRadioMode(bool radio) {
       }
       col->SetVisible(show);
     } else {
-      col->SetVisible(true);
+      bool visible = true;
+      auto it = fUserColumnVisibility.find(field);
+      if (it != fUserColumnVisibility.end())
+        visible = it->second;
+      col->SetVisible(visible);
     }
 
     auto *titled = dynamic_cast<BTitledColumn *>(col);
@@ -713,10 +860,11 @@ void MediaTableView::AddEntry(const MediaItem &mi) {
   AddRow(row);
 }
 
-void MediaTableView::UpdateItem(const MediaItem &mi) {
+void MediaTableView::UpdateItem(const MediaItem &mi, const BString *matchPath) {
+  const BString &key = matchPath ? *matchPath : mi.path;
   for (int32 i = 0; i < CountRows(); ++i) {
     MediaRow *mr = dynamic_cast<MediaRow *>(RowAt(i));
-    if (mr && mr->Item().path == mi.path) {
+    if (mr && mr->Item().path == key) {
       mr->SetItem(mi);
 
       bool m = mi.missing;
@@ -929,8 +1077,10 @@ void MediaTableView::_AddBatch(size_t count) {
     }
 
     bool scrolled = false;
+    float rowTop = 0;
     for (int32 i = 0; i < CountRows(); i++) {
-      if (auto *mr = dynamic_cast<MediaRow *>(RowAt(i))) {
+      BRow *row = RowAt(i);
+      if (auto *mr = dynamic_cast<MediaRow *>(row)) {
         for (const auto &sp : fSavedSelectedPaths) {
           if (mr->Item().path == sp) {
             AddToSelection(mr);
@@ -939,10 +1089,15 @@ void MediaTableView::_AddBatch(size_t count) {
         }
         if (!scrolled && !fTopVisiblePath.IsEmpty() &&
             mr->Item().path == fTopVisiblePath) {
-          ScrollTo(mr);
+          // ScrollTo(BRow*) only scrolls minimally, which would leave
+          // this row at the bottom edge; scroll explicitly so the
+          // previously top-visible row is at the top again.
+          ScrollTo(BPoint(0, rowTop));
           scrolled = true;
         }
       }
+      if (row)
+        rowTop += row->Height() + 1;
     }
     fTopVisiblePath = "";
     fSavedSelectedPaths.clear();
@@ -984,7 +1139,14 @@ void MediaTableView::SaveScrollState() {
   fTopVisiblePath = "";
   fSavedSelectedPaths.clear();
 
-  if (BRow *topRow = RowAt(BPoint(0, 5))) {
+  // RowAt(BPoint) expects content-space coordinates: y=5 is always the
+  // first row of the list. Offset by the outline view's scroll position
+  // to probe the row actually visible at the top.
+  BPoint topPoint(0, 5);
+  if (BView *outline = ScrollView())
+    topPoint.y += outline->Bounds().top;
+
+  if (BRow *topRow = RowAt(topPoint)) {
     if (auto *mr = dynamic_cast<MediaRow *>(topRow)) {
       fTopVisiblePath = mr->Item().path;
     }
@@ -1108,12 +1270,14 @@ void MediaTableView::AttachedToWindow() {
     outline->AddFilter(new DropFilter(this));
     outline->SetViewColor(B_TRANSPARENT_COLOR);
   }
+  Window()->AddShortcut('a', B_COMMAND_KEY, new BMessage(kMsgSelectAll), this);
 }
 
 /**
  * @brief Called when the view is detached from a window.
  */
 void MediaTableView::DetachedFromWindow() {
+  Window()->RemoveShortcut('a', B_COMMAND_KEY);
   BColumnListView::DetachedFromWindow();
 }
 
@@ -1305,6 +1469,10 @@ void MediaTableView::MessageReceived(BMessage *msg) {
         }
         menu.AddItem(new BMenuItem(B_TRANSLATE("Remove from Playlist"),
                                    new BMessage(MSG_DELETE_ITEM)));
+        menu.AddItem(new BMenuItem(B_TRANSLATE("Move To..."),
+                                   new BMessage(MSG_MOVE_TO)));
+        menu.AddItem(new BMenuItem(B_TRANSLATE("Move to Trash"),
+                                   new BMessage(MSG_MOVE_TO_TRASH)));
       }
 
       menu.AddSeparatorItem();
@@ -1371,6 +1539,23 @@ void MediaTableView::MessageReceived(BMessage *msg) {
     reorderMsg.AddInt32("to_index", targetIndex);
     if (Looper())
       Looper()->PostMessage(&reorderMsg);
+    break;
+  }
+
+  case MSG_COMMIT_EDIT: {
+    CommitCellEdit();
+    break;
+  }
+
+  case MSG_CANCEL_EDIT: {
+    CancelCellEdit();
+    break;
+  }
+
+  case kMsgSelectAll: {
+    for (int32 i = 0; i < CountRows(); ++i)
+      if (BRow *row = RowAt(i))
+        AddToSelection(row);
     break;
   }
 
@@ -1458,26 +1643,78 @@ void MediaTableView::SaveState(BMessage *msg) {
   if (!msg)
     return;
 
-  msg->RemoveName("col_index");
+  msg->RemoveName("col_name");
   msg->RemoveName("col_width");
   msg->RemoveName("col_visible");
 
+  // Helper lambda to get the title from any of our column types.
+  auto titleFor = [](BColumn *col) -> BString {
+    if (auto *sc = dynamic_cast<StatusStringColumn *>(col))
+      return sc->Title();
+    if (auto *ic = dynamic_cast<StatusIntegerColumn *>(col))
+      return ic->Title();
+    if (auto *rc = dynamic_cast<RatingColumn *>(col))
+      return rc->Title();
+    return BString();
+  };
+
+  // Phase 1: iterate columns returned by ColumnAt (visible display order).
+  // On some Haiku versions ColumnAt skips hidden columns, so we track which
+  // field numbers we cover here and handle the rest in Phase 2.
+  std::set<int32> savedFields;
+
   for (int32 i = 0; i < CountColumns(); ++i) {
     BColumn *col = ColumnAt(i);
-    BString name;
-    if (auto *sc = dynamic_cast<StatusStringColumn *>(col)) {
-      name = sc->Title();
-    } else if (auto *ic = dynamic_cast<StatusIntegerColumn *>(col)) {
-      name = ic->Title();
-    } else if (auto *rc = dynamic_cast<RatingColumn *>(col)) {
-      name = rc->Title();
+    if (!col)
+      continue;
+
+    BString name = titleFor(col);
+    if (name.IsEmpty())
+      continue;
+
+    int32 field = col->LogicalFieldNum();
+    savedFields.insert(field);
+
+    bool visible = col->IsVisible();
+    if (!fIsRadioMode) {
+      fUserColumnVisibility[field] = visible;
+    } else {
+      auto it = fUserColumnVisibility.find(field);
+      visible = (it != fUserColumnVisibility.end()) ? it->second : true;
     }
 
-    if (!name.IsEmpty()) {
-      msg->AddString("col_name", name);
-      msg->AddFloat("col_width", col->Width());
-      msg->AddBool("col_visible", col->IsVisible());
+    msg->AddString("col_name", name);
+    msg->AddFloat("col_width", col->Width());
+    msg->AddBool("col_visible", visible);
+  }
+
+  // Phase 2: emit any columns that ColumnAt didn't return (hidden columns).
+  // fColumnByField is populated at construction when all columns are visible,
+  // so it always contains the full set regardless of current visibility.
+  for (auto &[field, col] : fColumnByField) {
+    if (savedFields.count(field) > 0)
+      continue;
+
+    BString name = titleFor(col);
+    if (name.IsEmpty())
+      continue;
+
+    // Column was not returned by ColumnAt, meaning it is hidden in the
+    // current mode.  In library mode the user explicitly hid it (visible=false).
+    // In radio mode, use the cached library-mode visibility from
+    // fUserColumnVisibility so we don't clobber the user's library preference.
+    bool visible;
+    if (!fIsRadioMode) {
+      visible = false;
+      fUserColumnVisibility[field] = false;
+    } else {
+      auto it = fUserColumnVisibility.find(field);
+      visible = (it != fUserColumnVisibility.end()) ? it->second : true;
     }
+
+    msg->AddString("col_name", name);
+    msg->AddFloat("col_width", col->Width());
+    msg->AddBool("col_visible", visible);
   }
 }
 
@@ -1523,6 +1760,7 @@ void MediaTableView::LoadState(BMessage *msg) {
       BColumn *col = cols[colName];
       col->SetWidth(colWidth);
       col->SetVisible(colVisible);
+      fUserColumnVisibility[col->LogicalFieldNum()] = colVisible;
       MoveColumn(col, i);
     }
     i++;
@@ -1692,4 +1930,164 @@ void MediaTableView::_ApplyPendingSortRestore() {
   }
 
   fPendingSortRestore.MakeEmpty();
+}
+
+void MediaTableView::StartCellEdit(BRow *row, BColumn *column, int32 colIdx, float colLeft, BView *targetView) {
+  CommitCellEdit();
+
+  if (!row || !column || !targetView)
+    return;
+
+  BRect rowRect;
+  if (!GetRowRect(row, &rowRect))
+    return;
+
+  BRect cellRect(colLeft, rowRect.top, colLeft + column->Width(), rowRect.bottom);
+
+  BField *field = row->GetField(colIdx);
+  BString initialText;
+  if (auto *sf = dynamic_cast<BStringField *>(field)) {
+    initialText = sf->String();
+  } else if (auto *ifld = dynamic_cast<BIntegerField *>(field)) {
+    initialText << ifld->Value();
+  }
+
+  fEditingPathPrefix = "";
+  if (colIdx == 10) {
+    // Path edits are restricted to the file's volume: hide the mount
+    // point from the editor and re-prepend it on commit.
+    BEntry fileEntry(initialText.String());
+    entry_ref ref;
+    if (fileEntry.InitCheck() == B_OK && fileEntry.GetRef(&ref) == B_OK) {
+      BVolume volume(ref.device);
+      BDirectory rootDir;
+      if (volume.InitCheck() == B_OK &&
+          volume.GetRootDirectory(&rootDir) == B_OK) {
+        BEntry rootEntry;
+        BPath rootPath;
+        if (rootDir.GetEntry(&rootEntry) == B_OK &&
+            rootEntry.GetPath(&rootPath) == B_OK) {
+          BString mount = rootPath.Path();
+          if (mount != "/" && initialText.StartsWith(mount)) {
+            fEditingPathPrefix = mount;
+            initialText.Remove(0, mount.Length());
+          }
+        }
+      }
+    }
+  }
+
+  BRect editRect = cellRect;
+  editRect.InsetBy(1, 1);
+
+  CellTextControl *editor = new CellTextControl(editRect, "cell_editor", initialText.String(),
+                                                new BMessage(MSG_COMMIT_EDIT), BMessenger(this));
+  editor->SetTarget(this);
+
+  targetView->AddChild(editor);
+  
+  fActiveEditor = editor;
+  fEditingRow = row;
+  fEditingColumn = column;
+  fEditingColIdx = colIdx;
+  fEditingOutlineView = targetView;
+
+  editor->MakeFocus(true);
+  if (editor->TextView()) {
+    editor->TextView()->SelectAll();
+  }
+}
+
+void MediaTableView::CommitCellEdit() {
+  if (!fActiveEditor)
+    return;
+
+  CellTextControl *editor = fActiveEditor;
+  fActiveEditor = nullptr;
+
+  BString newText = editor->Text();
+
+  if (editor->Parent()) {
+    editor->Parent()->RemoveChild(editor);
+  }
+  delete editor;
+
+  if (fEditingRow) {
+    MediaRow *mr = dynamic_cast<MediaRow *>(fEditingRow);
+    if (mr) {
+      BString path = mr->Item().path;
+      const char *fieldName = FieldNameForColumn(fEditingColIdx);
+      if (fieldName && !path.IsEmpty()) {
+        if (fEditingColIdx == 10) {
+          // Path edits move the file on disk instead of writing tags.
+          BString newPath = newText;
+          if (!newPath.IsEmpty() && !fEditingPathPrefix.IsEmpty()) {
+            if (!newPath.StartsWith("/"))
+              newPath.Prepend("/");
+            newPath.Prepend(fEditingPathPrefix);
+          }
+          if (!newText.IsEmpty() && newPath != path) {
+            BMessage moveMsg(MSG_FILE_MOVE);
+            moveMsg.AddString("from", path);
+            moveMsg.AddString("to", newPath);
+            if (Window())
+              Window()->PostMessage(&moveMsg);
+          }
+        } else {
+          BMessage saveMsg(MSG_PROP_SAVE);
+          saveMsg.AddString("file", path);
+          saveMsg.AddString(fieldName, newText);
+
+          if (Window()) {
+            Window()->PostMessage(&saveMsg);
+          }
+        }
+      }
+    }
+  }
+
+  fEditingRow = nullptr;
+  fEditingColumn = nullptr;
+  fEditingColIdx = -1;
+  fEditingOutlineView = nullptr;
+  fEditingPathPrefix = "";
+}
+
+void MediaTableView::CancelCellEdit() {
+  if (!fActiveEditor)
+    return;
+
+  CellTextControl *editor = fActiveEditor;
+  fActiveEditor = nullptr;
+
+  if (editor->Parent()) {
+    editor->Parent()->RemoveChild(editor);
+  }
+  delete editor;
+
+  fEditingRow = nullptr;
+  fEditingColumn = nullptr;
+  fEditingColIdx = -1;
+  fEditingOutlineView = nullptr;
+  fEditingPathPrefix = "";
+}
+
+const char *MediaTableView::FieldNameForColumn(int32 colIdx) const {
+  switch (colIdx) {
+    case 0: return "title";
+    case 1: return "artist";
+    case 2: return "album";
+    case 3: return "albumArtist";
+    case 4: return "genre";
+    case 5: return "year";
+    case 7: return "track";
+    case 8: return "disc";
+    case 10: return "path";
+    default: return nullptr;
+  }
+}
+
+
+BView* MediaTableView::ActiveEditor() const {
+  return fActiveEditor;
 }

@@ -579,6 +579,28 @@ void MediaLibraryCache::MessageReceived(BMessage *msg) {
     break;
   }
 
+  case MSG_FILE_MOVED: {
+    BString from, to;
+    if (msg->FindString("from", &from) != B_OK ||
+        msg->FindString("to", &to) != B_OK)
+      break;
+
+    auto it = fEntries.find(from);
+    if (it == fEntries.end())
+      break;
+
+    MediaItem e = it->second;
+    fEntries.erase(it);
+    e.path = to;
+    fEntries[e.path] = e;
+
+    DEBUG_PRINT("File moved in cache: %s -> %s\n", from.String(),
+                to.String());
+    SaveCache();
+    fCacheDirty = false;
+    break;
+  }
+
   case MSG_REGISTER_TARGET: {
     BMessenger newTarget;
     if (msg->FindMessenger("target", &newTarget) == B_OK) {

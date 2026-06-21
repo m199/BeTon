@@ -9,13 +9,19 @@
 #include "PlaylistSidebarView.h"
 #include "MediaTableView.h"
 #include "StatusBarController.h"
+#include "UndoManager.h"
 #include <Catalog.h>
+#include <Directory.h>
 #include <MessageRunner.h>
 #include <Entry.h>
+#include <Messenger.h>
+#include <OS.h>
 #include <Path.h>
 #include <Roster.h>
 #include <algorithm>
+#include <map>
 #include <set>
+#include <vector>
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "LibraryController"
@@ -29,6 +35,130 @@ LibraryController::~LibraryController() {}
 void LibraryController::ShowDirectoryManager() {
   MusicSourceManagerWindow *win = new MusicSourceManagerWindow(fWindow->fMediaLibraryCache);
   win->Show();
+}
+
+/**
+ * @brief Moves a file on disk and updates library state on success.
+ */
+void LibraryController::HandleFileMove(BMessage *msg) {
+  BString from, to;
+  if (msg->FindString("from", &from) != B_OK ||
+      msg->FindString("to", &to) != B_OK)
+    return;
+  if (from.IsEmpty() || to.IsEmpty() || from == to)
+    return;
+
+  if (to[0] != '/') {
+    fWindow->UpdateStatus(B_TRANSLATE("Move failed: path must be absolute"));
+    return;
+  }
+
+  BEntry entry(from.String());
+  if (entry.InitCheck() != B_OK || !entry.Exists()) {
+    fWindow->UpdateStatus(B_TRANSLATE("Move failed: source file not found"));
+    return;
+  }
+
+  BPath toPath(to.String());
+  BPath toDir;
+  if (toPath.InitCheck() != B_OK || toPath.GetParent(&toDir) != B_OK ||
+      !toPath.Leaf() || toPath.Leaf()[0] == '\0') {
+    fWindow->UpdateStatus(B_TRANSLATE("Move failed: invalid target path"));
+    return;
+  }
+
+  BDirectory dir(toDir.Path());
+  if (dir.InitCheck() != B_OK) {
+    fWindow->UpdateStatus(
+        B_TRANSLATE("Move failed: target folder does not exist"));
+    return;
+  }
+
+  status_t st = entry.MoveTo(&dir, toPath.Leaf(), false);
+  if (st != B_OK) {
+    BString status(B_TRANSLATE("Move failed: "));
+    status << strerror(st);
+    fWindow->UpdateStatus(status);
+    return;
+  }
+
+  BString newPath = toPath.Path();
+
+  // Update the in-memory model and the visible row.
+  MediaTableView *cv =
+      (fWindow->fLibraryManager) ? fWindow->fLibraryManager->ContentView()
+                                 : nullptr;
+
+  auto mapIt = fWindow->fPathIndex.find(from);
+  if (mapIt != fWindow->fPathIndex.end()) {
+    size_t idx = mapIt->second;
+    fWindow->fPathIndex.erase(mapIt);
+    fWindow->fAllItems[idx].path = newPath;
+    fWindow->fPathIndex[newPath] = idx;
+    if (cv)
+      cv->UpdateItem(fWindow->fAllItems[idx], &from);
+  } else if (cv) {
+    // Items outside the library index (e.g. playlist-only entries):
+    // update the visible row directly.
+    for (int32 i = 0; i < cv->CountRows(); ++i) {
+      const MediaItem *mi = cv->ItemAt(i);
+      if (mi && mi->path == from) {
+        MediaItem updated = *mi;
+        updated.path = newPath;
+        cv->UpdateItem(updated, &from);
+        break;
+      }
+    }
+  }
+
+  if (cv && cv->NowPlayingPath() == from)
+    cv->SetNowPlayingPath(newPath);
+
+  if (fWindow->fLibraryManager)
+    fWindow->fLibraryManager->RenameActivePath(from, newPath);
+
+  // Rekey the persistent cache entry.
+  if (fWindow->fMediaLibraryCache) {
+    BMessage moved(MSG_FILE_MOVED);
+    moved.AddString("from", from);
+    moved.AddString("to", newPath);
+    fWindow->fMediaLibraryCache->PostMessage(&moved);
+  }
+
+  // Rewrite saved playlists that reference the old path.
+  if (fWindow->fPlaylistLibrary) {
+    BMessage names;
+    fWindow->fPlaylistLibrary->GetPlaylistNames(names, true);
+    BString plName;
+    for (int32 i = 0; names.FindString("name", i, &plName) == B_OK; ++i) {
+      std::vector<BString> paths =
+          fWindow->fPlaylistLibrary->LoadPlaylist(plName);
+      bool changed = false;
+      for (auto &p : paths) {
+        if (p == from) {
+          p = newPath;
+          changed = true;
+        }
+      }
+      if (changed)
+        fWindow->fPlaylistLibrary->SavePlaylist(plName, paths);
+    }
+  }
+
+  // Record the move as an undoable action (skip undo/redo replays).
+  if (!msg->HasBool("undo_replay") && fWindow->fUndoManager) {
+    BMessage u(MSG_FILE_MOVE);
+    u.AddString("from", newPath);
+    u.AddString("to", from);
+    BMessage r(MSG_FILE_MOVE);
+    r.AddString("from", from);
+    r.AddString("to", newPath);
+    fWindow->fUndoManager->RecordAction({u}, {r});
+  }
+
+  BString status(B_TRANSLATE("Moved to "));
+  status << newPath;
+  fWindow->UpdateStatus(status);
 }
 
 /**
@@ -404,8 +534,88 @@ void LibraryController::RebuildPathIndex() {
   }
 }
 
+struct TrackerRevealEntry {
+  entry_ref fileRef;
+  BString   dirPath;
+};
+
+// Runs in a detached thread: waits for Tracker windows to settle, then
+// walks the Tracker scripting hierarchy to find each parent directory
+// window and sets its Selection property to the corresponding file.
+static int32 _TrackerSelectThread(void *data) {
+  auto *entries = static_cast<std::vector<TrackerRevealEntry> *>(data);
+
+  BMessenger tracker("application/x-vnd.Be-TRAK");
+  if (!tracker.IsValid()) {
+    delete entries;
+    return B_OK;
+  }
+
+  // Gather refs per window index to batch into one B_SET_PROPERTY each.
+  // Retry while the freshly launched window has not appeared yet.
+  std::map<int32, std::vector<entry_ref>> windowSelections;
+
+  for (int32 attempt = 0; attempt < 8; ++attempt) {
+    snooze(300000); // 300 ms between polls for the new window
+    windowSelections.clear();
+
+    BMessage countMsg(B_COUNT_PROPERTIES);
+    countMsg.AddSpecifier("Window");
+    BMessage countReply;
+    if (tracker.SendMessage(&countMsg, &countReply, 0, 2000000) != B_OK)
+      continue;
+    int32 windowCount = 0;
+    countReply.FindInt32("result", &windowCount);
+
+    size_t matched = 0;
+    for (auto &e : *entries) {
+      for (int32 i = 0; i < windowCount; ++i) {
+        BMessage pathMsg(B_GET_PROPERTY);
+        pathMsg.AddSpecifier("Path");
+        pathMsg.AddSpecifier("Poses");
+        pathMsg.AddSpecifier("Window", i);
+
+        BMessage pathReply;
+        if (tracker.SendMessage(&pathMsg, &pathReply, 0, 500000) != B_OK)
+          continue;
+
+        // Tracker replies with the window's directory as an entry_ref.
+        entry_ref dirRef;
+        if (pathReply.FindRef("result", &dirRef) != B_OK)
+          continue;
+        BPath wPath(&dirRef);
+        if (wPath.InitCheck() != B_OK)
+          continue;
+
+        if (e.dirPath == wPath.Path()) {
+          windowSelections[i].push_back(e.fileRef);
+          ++matched;
+          break;
+        }
+      }
+    }
+
+    if (matched == entries->size())
+      break;
+  }
+
+  for (auto &[winIdx, fileRefs] : windowSelections) {
+    BMessage sel(B_SET_PROPERTY);
+    sel.AddSpecifier("Selection");
+    sel.AddSpecifier("Poses");
+    sel.AddSpecifier("Window", winIdx);
+    for (auto &ref : fileRefs)
+      sel.AddRef("data", &ref);
+    tracker.SendMessage(&sel);
+  }
+
+  delete entries;
+  return B_OK;
+}
+
 /**
- * @brief Opens parent directories of provided refs in Tracker.
+ * @brief Opens parent directories of provided refs in Tracker and selects
+ *        the files within those windows.
  */
 void LibraryController::RevealInTracker(BMessage *msg) {
   std::vector<entry_ref> refs;
@@ -422,9 +632,11 @@ void LibraryController::RevealInTracker(BMessage *msg) {
   if (refs.empty())
     return;
 
+  auto *threadEntries = new std::vector<TrackerRevealEntry>();
   std::set<BString> openedDirs;
-  for (const auto &r : refs) {
-    BEntry e(&r, true);
+
+  for (const auto &fileRef : refs) {
+    BEntry e(&fileRef, true);
     BPath filePath;
     if (e.GetPath(&filePath) != B_OK)
       continue;
@@ -433,18 +645,29 @@ void LibraryController::RevealInTracker(BMessage *msg) {
     if (dirPath.GetParent(&dirPath) != B_OK)
       continue;
 
-    BString d = dirPath.Path();
-    if (openedDirs.insert(d).second) {
+    BString dirStr = dirPath.Path();
+    if (openedDirs.insert(dirStr).second) {
       entry_ref dirRef;
-      if (get_ref_for_path(d.String(), &dirRef) == B_OK) {
+      if (get_ref_for_path(dirStr.String(), &dirRef) == B_OK) {
         BRoster roster;
         status_t st = roster.Launch(&dirRef);
         if (st != B_OK && st != B_ALREADY_RUNNING) {
-          DEBUG_PRINT("Tracker Launch dir failed: %s\n",
-                      strerror(st));
+          DEBUG_PRINT("Tracker Launch dir failed: %s\n", strerror(st));
         }
       }
     }
+
+    TrackerRevealEntry entry;
+    entry.fileRef = fileRef;
+    entry.dirPath = dirStr;
+    threadEntries->push_back(entry);
   }
+
+  thread_id tid = spawn_thread(_TrackerSelectThread, "tracker_reveal",
+                               B_NORMAL_PRIORITY, threadEntries);
+  if (tid >= 0)
+    resume_thread(tid);
+  else
+    delete threadEntries;
 }
 

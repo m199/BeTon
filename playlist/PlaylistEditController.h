@@ -27,10 +27,19 @@ public:
   void ReplyWithPlaylistNames(BMessage *msg);
   void HandlePlaylistFolderSelected(BMessage *msg);
   void DeleteSelectedPlaylistItems();
+  void MoveSelectedItemsToTrash();
+  void SelectMoveToFolder();
+  void HandleMoveToFolderSelected(BMessage *msg);
+  void MoveSelectedItemsTo(const entry_ref *targetDirRef);
+  void RestorePlaylistPaths(BMessage *msg);
+  void CreatePlaylistWithPaths(BMessage *msg);
+  void DeletePlaylistByName(BMessage *msg);
 
 private:
   MainWindow *fWindow;
   BMessage fPendingPlaylistFiles;
+
+  void ResolveRefRecursively(const struct entry_ref &ref, std::vector<BString> &outPaths);
 };
 
 #endif // BETON_PLAYLIST_EDIT_CONTROLLER_H

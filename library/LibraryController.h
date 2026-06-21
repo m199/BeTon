@@ -36,6 +36,13 @@ public:
   void RevealInTracker(BMessage* msg);
 
   /**
+   * @brief Moves a file on disk and updates library state on success.
+   * @param msg Message with "from" and "to" absolute path strings.
+   * On failure nothing changes and the error is shown in the status bar.
+   */
+  void HandleFileMove(BMessage* msg);
+
+  /**
    * @brief Handles initial cache-load completion and refreshes views.
    */
   void HandleCacheLoaded();
