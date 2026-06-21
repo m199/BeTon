@@ -684,6 +684,9 @@ MediaTableView::MediaTableView(const char *name)
                                    B_TRUNCATE_END),
             10);
   AddColumn(new RatingColumn(B_TRANSLATE("Rating"), 80, 60, 100), 11);
+  AddColumn(new StatusIntegerColumn(B_TRANSLATE("Sort"), 50, 20, 80,
+                                    "", B_ALIGN_RIGHT),
+            12);
 
   SetInvocationMessage(new BMessage(MSG_PLAY));
   SetSelectionMessage(new BMessage(MSG_SELECTION_CHANGED_CONTENT));
@@ -697,6 +700,11 @@ MediaTableView::MediaTableView(const char *name)
       fUserColumnVisibility[field] = true;
       fColumnByField[field] = col;
     }
+  }
+
+  if (BColumn *sortColumn = fColumnByField[12]) {
+    sortColumn->SetVisible(false);
+    fUserColumnVisibility[12] = false;
   }
 }
 
@@ -769,6 +777,8 @@ void MediaTableView::SetRadioMode(bool radio) {
       auto it = fUserColumnVisibility.find(field);
       if (it != fUserColumnVisibility.end())
         visible = it->second;
+      if (field == 12)
+        visible = fIsPlaylistMode;
       col->SetVisible(visible);
     }
 
@@ -799,6 +809,10 @@ void MediaTableView::SetRadioMode(bool radio) {
 
 void MediaTableView::SetPlaylistMode(bool isPlaylist) {
   fIsPlaylistMode = isPlaylist;
+
+  auto it = fColumnByField.find(12);
+  if (it != fColumnByField.end() && it->second)
+    it->second->SetVisible(isPlaylist && !fIsRadioMode);
 }
 
 /**
@@ -843,9 +857,7 @@ void MediaTableView::AddEntry(const MediaItem &mi) {
   durStr.SetToFormat("%ld:%02ld", (long)min, (long)sec);
   row->SetField(new StatusStringField(durStr, m, pathPtr, src), 6);
 
-  int32 displayTrack = fIsPlaylistMode ? (CountRows() + 1) : mi.track;
-
-  row->SetField(new StatusIntegerField(displayTrack, m, src, pathPtr, mi.disc,
+  row->SetField(new StatusIntegerField(mi.track, m, src, pathPtr, mi.disc,
                                        mi.track),
                 7);
   row->SetField(new StatusIntegerField(mi.disc, m, src, pathPtr, mi.disc,
@@ -856,6 +868,9 @@ void MediaTableView::AddEntry(const MediaItem &mi) {
   row->SetField(new StatusStringField(RatingColumn::RatingToStars(mi.rating), m,
                                       pathPtr, src),
                 11);
+  row->SetField(new StatusIntegerField(fIsPlaylistMode ? CountRows() + 1 : 0,
+                                       m, src, pathPtr),
+                12);
 
   AddRow(row);
 }
@@ -897,9 +912,7 @@ void MediaTableView::UpdateItem(const MediaItem &mi, const BString *matchPath) {
       durStr.SetToFormat("%ld:%02ld", (long)min, (long)sec);
       mr->SetField(new StatusStringField(durStr, m, pathPtr, src), 6);
 
-      int32 displayTrack = fIsPlaylistMode ? (i + 1) : mi.track;
-
-      mr->SetField(new StatusIntegerField(displayTrack, m, src, pathPtr,
+      mr->SetField(new StatusIntegerField(mi.track, m, src, pathPtr,
                                           mi.disc, mi.track),
                    7);
       mr->SetField(new StatusIntegerField(mi.disc, m, src, pathPtr, mi.disc,
@@ -910,6 +923,9 @@ void MediaTableView::UpdateItem(const MediaItem &mi, const BString *matchPath) {
       mr->SetField(new StatusStringField(RatingColumn::RatingToStars(mi.rating),
                                          m, pathPtr, src),
                    11);
+      mr->SetField(new StatusIntegerField(fIsPlaylistMode ? i + 1 : 0, m, src,
+                                          pathPtr),
+                   12);
 
       InvalidateRow(mr);
       break;
@@ -931,7 +947,13 @@ void MediaTableView::AddEntries(std::vector<MediaItem> items) {
   fPendingItems = std::move(items);
   fPendingIndex = 0;
 
-  if (!fHasPendingSortRestore) {
+  if (!fHasPendingSortRestore && fIsPlaylistMode) {
+    fPendingSortRestore.MakeEmpty();
+    fPendingSortRestore.AddInt32("sortID", 12);
+    fPendingSortRestore.AddBool("sortascending", true);
+    fPendingSortRestore.AddInt32("sort_schema", 2);
+    fHasPendingSortRestore = true;
+  } else if (!fHasPendingSortRestore) {
     fPendingSortRestore.MakeEmpty();
     SaveSortState(&fPendingSortRestore);
     if (!fPendingSortRestore.IsEmpty())
@@ -963,7 +985,7 @@ void MediaTableView::AddEntries(std::vector<MediaItem> items) {
  * @brief Creates a MediaRow from a MediaItem without adding it to the view.
  *
  * @param mi The media item to create a row for.
- * @param playlistIndex Optional 1-based index to use for the track column in playlist mode.
+ * @param playlistIndex Optional 1-based index to use for the Sort column in playlist mode.
  * @return Pointer to the newly created MediaRow.
  */
 BRow *MediaTableView::_CreateRow(const MediaItem &mi, int32 playlistIndex) {
@@ -1001,9 +1023,7 @@ BRow *MediaTableView::_CreateRow(const MediaItem &mi, int32 playlistIndex) {
   durStr.SetToFormat("%ld:%02ld", (long)min, (long)sec);
   row->SetField(new StatusStringField(durStr, m, pathPtr, src), 6);
 
-  int32 displayTrack = (fIsPlaylistMode && playlistIndex > 0) ? playlistIndex : mi.track;
-
-  row->SetField(new StatusIntegerField(displayTrack, m, src, pathPtr, mi.disc,
+  row->SetField(new StatusIntegerField(mi.track, m, src, pathPtr, mi.disc,
                                        mi.track),
                 7);
   row->SetField(new StatusIntegerField(mi.disc, m, src, pathPtr, mi.disc,
@@ -1014,6 +1034,11 @@ BRow *MediaTableView::_CreateRow(const MediaItem &mi, int32 playlistIndex) {
   row->SetField(new StatusStringField(RatingColumn::RatingToStars(mi.rating), m,
                                       pathPtr, src),
                 11);
+  row->SetField(new StatusIntegerField((fIsPlaylistMode && playlistIndex > 0)
+                                           ? playlistIndex
+                                           : 0,
+                                       m, src, pathPtr),
+                12);
 
   return row;
 }
@@ -1758,13 +1783,20 @@ void MediaTableView::LoadState(BMessage *msg) {
 
     if (cols.count(colName)) {
       BColumn *col = cols[colName];
+      int32 field = col->LogicalFieldNum();
       col->SetWidth(colWidth);
+      if (field == 12 && !fIsPlaylistMode)
+        colVisible = false;
       col->SetVisible(colVisible);
-      fUserColumnVisibility[col->LogicalFieldNum()] = colVisible;
+      fUserColumnVisibility[field] = colVisible;
       MoveColumn(col, i);
     }
     i++;
   }
+
+  auto it = fColumnByField.find(12);
+  if (it != fColumnByField.end() && it->second)
+    it->second->SetVisible(fIsPlaylistMode && !fIsRadioMode);
 }
 
 /**
@@ -1786,12 +1818,16 @@ void MediaTableView::SaveSortState(BMessage *msg) {
   BColumnListView::SaveState(&tmp);
 
   int32 sortID;
+  bool wroteSortState = false;
   for (int32 i = 0; tmp.FindInt32("sortID", i, &sortID) == B_OK; ++i) {
     bool ascending = true;
     tmp.FindBool("sortascending", i, &ascending);
     msg->AddInt32("sortID", sortID);
     msg->AddBool("sortascending", ascending);
+    wroteSortState = true;
   }
+  if (wroteSortState)
+    msg->AddInt32("sort_schema", 2);
 }
 
 /**
@@ -1821,7 +1857,7 @@ void MediaTableView::RestoreSortState(BMessage *msg) {
  *
  * Column field IDs: 0=title, 1=artist, 2=album, 3=albumArtist,
  * 4=genre, 5=year, 6=duration, 7=track, 8=disc, 9=bitrate,
- * 10=path, 11=rating.
+ * 10=path, 11=rating, 12=playlist sort order.
  */
 void MediaTableView::_PreSortPendingItems() {
   int32 sortID = -1;
@@ -1830,6 +1866,15 @@ void MediaTableView::_PreSortPendingItems() {
   if (fPendingSortRestore.FindInt32("sortID", 0, &sortID) != B_OK)
     return;
   fPendingSortRestore.FindBool("sortascending", 0, &ascending);
+
+  int32 sortSchema = 0;
+  bool legacySortState =
+      fPendingSortRestore.FindInt32("sort_schema", &sortSchema) != B_OK;
+  if (legacySortState && fIsPlaylistMode && sortID == 7)
+    sortID = 12;
+
+  if (sortID == 12)
+    return;
 
   auto compareInt = [](int32 a, int32 b) {
     return (a < b) ? -1 : (a > b ? 1 : 0);
@@ -1917,6 +1962,15 @@ void MediaTableView::_ApplyPendingSortRestore() {
   int32 sortID;
   for (int32 i = 0; fPendingSortRestore.FindInt32("sortID", i, &sortID) == B_OK;
        ++i) {
+    if (sortID == 12 && !fIsPlaylistMode)
+      continue;
+
+    int32 sortSchema = 0;
+    bool legacySortState =
+        fPendingSortRestore.FindInt32("sort_schema", &sortSchema) != B_OK;
+    if (legacySortState && fIsPlaylistMode && sortID == 7)
+      sortID = 12;
+
     bool ascending = true;
     fPendingSortRestore.FindBool("sortascending", i, &ascending);
 

@@ -531,12 +531,12 @@ void LibraryBrowserController::UpdateFilteredViews(
   /// 6. Update Content View
   size_t finalCount = finalItems.size();
   if (updateContentList) {
+    fContentView->SetPlaylistMode(!isLibraryMode);
     if (restoreFilters && fSavedStates.count(currentContext) > 0) {
       FilterState &state = fSavedStates[currentContext];
       if (!state.sortState.IsEmpty())
         fContentView->RestoreSortState(&state.sortState);
     }
-    fContentView->SetPlaylistMode(!isLibraryMode);
     fContentView->AddEntries(std::move(finalItems));
   }
 

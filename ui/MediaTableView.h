@@ -72,7 +72,7 @@ public:
 
   /**
    * @brief Sets whether the view is displaying a playlist.
-   * In playlist mode, the Track column displays the sequence index.
+   * In playlist mode, the Sort column displays the sequence index.
    */
   void SetPlaylistMode(bool isPlaylist);
 
