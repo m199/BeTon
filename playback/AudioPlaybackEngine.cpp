@@ -24,6 +24,16 @@ static AudioPlaybackEngine *sMidiHookController = nullptr;
 
 static void EmptyMidiFileHook(int32) {}
 
+static constexpr bigtime_t kAudioFadeDurationUs = 80000;
+
+static int64 FadeFrameCount(const media_raw_audio_format &format) {
+  if (format.frame_rate <= 0)
+    return 1;
+  return std::max<int64>(
+      1, static_cast<int64>((format.frame_rate * kAudioFadeDurationUs) /
+                            1000000.0f));
+}
+
 #if ENABLE_MIDI_PLAYBACK
 struct MidiTempoEvent {
   uint32 tick;
@@ -334,6 +344,97 @@ void AudioPlaybackEngine::SetVolume(float vol) {
   }
 }
 
+void AudioPlaybackEngine::_BeginFadeIn() {
+  fFadeOutFrames.store(0, std::memory_order_relaxed);
+  fFadeInFrames.store(-1, std::memory_order_relaxed);
+}
+
+void AudioPlaybackEngine::_BeginFadeOut() {
+  fFadeInFrames.store(0, std::memory_order_relaxed);
+  fFadeOutFrames.store(-1, std::memory_order_relaxed);
+}
+
+void AudioPlaybackEngine::_ApplyFade(void *buffer, size_t size,
+                                     const media_raw_audio_format &format) {
+  const int bytesPerSample =
+      format.format & media_raw_audio_format::B_AUDIO_SIZE_MASK;
+  const int channelCount = format.channel_count;
+  const int frameSize = bytesPerSample * channelCount;
+  if (!buffer || size == 0 || bytesPerSample <= 0 || channelCount <= 0 ||
+      frameSize <= 0)
+    return;
+
+  const int64 totalFrames = FadeFrameCount(format);
+  const int64 frames = static_cast<int64>(size / frameSize);
+  if (frames <= 0)
+    return;
+
+  int64 fadeIn = fFadeInFrames.load(std::memory_order_relaxed);
+  int64 fadeOut = fFadeOutFrames.load(std::memory_order_relaxed);
+  if (fadeIn < 0) {
+    fadeIn = totalFrames;
+    fFadeInFrames.store(fadeIn, std::memory_order_relaxed);
+  }
+  if (fadeOut < 0) {
+    fadeOut = totalFrames;
+    fFadeOutFrames.store(fadeOut, std::memory_order_relaxed);
+  }
+  if (fadeIn <= 0 && fadeOut <= 0)
+    return;
+
+  auto gainForFrame = [&](int64 frame) {
+    float gain = 1.0f;
+    if (fadeIn > 0)
+      gain *= static_cast<float>(totalFrames - fadeIn + frame) / totalFrames;
+    if (fadeOut > 0)
+      gain *= static_cast<float>(fadeOut - frame) / totalFrames;
+    if (gain < 0.0f)
+      return 0.0f;
+    if (gain > 1.0f)
+      return 1.0f;
+    return gain;
+  };
+
+  if (format.format == media_raw_audio_format::B_AUDIO_FLOAT) {
+    float *samples = static_cast<float *>(buffer);
+    for (int64 frame = 0; frame < frames; ++frame) {
+      float gain = gainForFrame(frame);
+      for (int channel = 0; channel < channelCount; ++channel)
+        samples[frame * channelCount + channel] *= gain;
+    }
+  } else if (bytesPerSample == 2) {
+    int16 *samples = static_cast<int16 *>(buffer);
+    for (int64 frame = 0; frame < frames; ++frame) {
+      float gain = gainForFrame(frame);
+      for (int channel = 0; channel < channelCount; ++channel) {
+        int32 scaled =
+            static_cast<int32>(samples[frame * channelCount + channel] * gain);
+        samples[frame * channelCount + channel] =
+            static_cast<int16>(
+                std::max<int32>(-32768, std::min<int32>(32767, scaled)));
+      }
+    }
+  } else if (bytesPerSample == 4) {
+    int32 *samples = static_cast<int32 *>(buffer);
+    for (int64 frame = 0; frame < frames; ++frame) {
+      float gain = gainForFrame(frame);
+      for (int channel = 0; channel < channelCount; ++channel) {
+        double scaled = samples[frame * channelCount + channel] * gain;
+        samples[frame * channelCount + channel] =
+            static_cast<int32>(std::max<double>(
+                -2147483648.0, std::min<double>(2147483647.0, scaled)));
+      }
+    }
+  }
+
+  if (fadeIn > 0)
+    fFadeInFrames.store(std::max<int64>(0, fadeIn - frames),
+                        std::memory_order_relaxed);
+  if (fadeOut > 0)
+    fFadeOutFrames.store(std::max<int64>(0, fadeOut - frames),
+                         std::memory_order_relaxed);
+}
+
 status_t AudioPlaybackEngine::_StartMidiAt(int32 position) {
   if (!fMidiSynth)
     return B_ERROR;
@@ -603,6 +704,7 @@ void AudioPlaybackEngine::Play(size_t trackIndex) {
   }
 
   fPlayer->SetVolume(fVolume);
+  _BeginFadeIn();
 
   fPlayer->Start();
   fPlayer->SetHasData(true);
@@ -761,6 +863,7 @@ void AudioPlaybackEngine::PlayUrl(const BUrl &url, const char *title,
   }
 
   fPlayer->SetVolume(fVolume);
+  _BeginFadeIn();
   fPlayer->Start();
   fPlayer->SetHasData(true);
 
@@ -805,7 +908,10 @@ void AudioPlaybackEngine::Pause() {
 #endif
 
   if (fPlayer && fPlaying.load(std::memory_order_relaxed)) {
+    _BeginFadeOut();
+    snooze(kAudioFadeDurationUs);
     fPlayer->Stop();
+    fFadeOutFrames.store(0, std::memory_order_relaxed);
     fPaused.store(true, std::memory_order_relaxed);
     fPlaying.store(false, std::memory_order_relaxed);
   }
@@ -846,6 +952,7 @@ void AudioPlaybackEngine::Resume() {
 #endif
 
   if (fPlayer && fPaused.load(std::memory_order_relaxed)) {
+    _BeginFadeIn();
     fPlayer->Start();
     fPlayer->SetHasData(true);
     fPaused.store(false, std::memory_order_relaxed);
@@ -891,11 +998,21 @@ void AudioPlaybackEngine::_StopLocked(bool switching) {
   }
 #endif
 
+  if (fPlayer &&
+      (fPlaying.load(std::memory_order_relaxed) ||
+       fPaused.load(std::memory_order_relaxed)) &&
+      !fAtEnd.load(std::memory_order_relaxed)) {
+    _BeginFadeOut();
+    snooze(kAudioFadeDurationUs);
+  }
+
   _StopTimeUpdates();
   fAtEnd = true;
   fPlaying.store(false, std::memory_order_relaxed);
   fPaused.store(false, std::memory_order_relaxed);
   fIsStreaming.store(false, std::memory_order_relaxed);
+  fFadeInFrames.store(0, std::memory_order_relaxed);
+  fFadeOutFrames.store(0, std::memory_order_relaxed);
 
   if (fNetworkStream) {
       DEBUG_PRINT("stopping NetworkAudioStreamIO to unblock audio callback...\n");
@@ -1172,10 +1289,14 @@ void AudioPlaybackEngine::_PlayBuffer(
         }
       }
     } else if (read > 0) {
-      const int bytesPerSample = (format.format & 0xF);
+      if ((size_t)read < size)
+        memset((uint8 *)buffer + read, 0, size - read);
+      self->_ApplyFade(buffer, (size_t)read, format);
+      const int bytesPerSample =
+          format.format & media_raw_audio_format::B_AUDIO_SIZE_MASK;
       const int frameSize = bytesPerSample * format.channel_count;
       if (frameSize > 0) {
-        int64 frames = (int64)size / frameSize;
+        int64 frames = (int64)read / frameSize;
         self->fCurrentPos +=
             (bigtime_t)((frames * 1000000LL) / (int)format.frame_rate);
       }
@@ -1190,7 +1311,8 @@ void AudioPlaybackEngine::_PlayBuffer(
     return;
   }
 
-  const int bytesPerSample = (format.format & 0xF);
+  const int bytesPerSample =
+      format.format & media_raw_audio_format::B_AUDIO_SIZE_MASK;
   const int frameSize = bytesPerSample * format.channel_count;
   int64 frames = frameSize > 0 ? (int64)(size / frameSize) : 0;
   status_t ret = B_ERROR;
@@ -1201,6 +1323,7 @@ void AudioPlaybackEngine::_PlayBuffer(
     self->fCurrentPos +=
         (bigtime_t)((frames * 1000000LL) / (int)format.frame_rate);
     size_t produced = (size_t)frames * frameSize;
+    self->_ApplyFade(buffer, produced, format);
     if (produced < size)
       memset((uint8 *)buffer + produced, 0, size - produced);
   } else if (self->fIsStreaming.load(std::memory_order_relaxed)) {

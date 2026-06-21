@@ -106,6 +106,10 @@ private:
   void _StopTimeUpdates();
   void _CleanupMedia();
   void _StopLocked(bool switching);
+  void _BeginFadeIn();
+  void _BeginFadeOut();
+  void _ApplyFade(void *buffer, size_t size,
+                  const media_raw_audio_format &format);
   status_t _StartMidiAt(int32 position);
   void _StopMidi(bool unload);
   void _SilenceMidi();
@@ -139,6 +143,8 @@ private:
   std::atomic<int32> fCurrentBitrate{0};
   std::atomic<int32> fCurrentSampleRate{0};
   std::atomic<int32> fCurrentChannels{0};
+  std::atomic<int64> fFadeInFrames{0};
+  std::atomic<int64> fFadeOutFrames{0};
 
   std::atomic<size_t> fCurrentIdx{0};
   ///@}

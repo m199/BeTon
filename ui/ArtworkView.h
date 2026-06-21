@@ -28,15 +28,22 @@ public:
   void Draw(BRect update) override;
   void MessageReceived(BMessage *msg) override;
   void GetPreferredSize(float *w, float *h) override;
+  void FrameResized(float width, float height) override;
   
   bool HasHeightForWidth() override;
   void GetHeightForWidth(float width, float *min, float *max,
                          float *pref) override;
 
 private:
+  BRect _CoverFrame() const;
+  void _InvalidateScaledBitmap();
+  void _UpdateScaledBitmap();
+
   /** @name Data */
   ///@{
   BBitmap *fBitmap = nullptr;
+  BBitmap *fScaledBitmap = nullptr;
+  BRect fScaledFrame;
   ///@}
 };
 
