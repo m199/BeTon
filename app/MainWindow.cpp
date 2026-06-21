@@ -962,18 +962,22 @@ status_t MainWindow::_ThreadEntry(void *data) {
  */
 void MainWindow::UpdateFilteredViews(bool preserveScroll) {
   if (fLibraryManager) {
-    const auto &items = (fIsRadioMode || fIsDlnaMode) ? fRadioItems : fAllItems;
+    const auto &items =
+        (fIsRadioMode || fIsDlnaMode) ? fRadioItems : fAllItems;
     BString context = "Library";
     if (fIsRadioMode)
       context = "Radio";
     else if (fIsDlnaMode)
       context = "DLNA";
+    else if (fIsFolderMode)
+      context = fCurrentPlaylistName;
     else if (!fIsLibraryMode)
       context = fCurrentPlaylistName;
 
     fLibraryManager->UpdateFilteredViews(
-        items, fIsLibraryMode || fIsRadioMode || fIsDlnaMode, context,
-        fSearchField->Text(), preserveScroll);
+        items, fIsLibraryMode || fIsRadioMode || fIsDlnaMode,
+        context,
+        fSearchField->Text(), preserveScroll, true, IsPlaylistSelected());
     if (!fIsRadioMode && !fIsDlnaMode) {
       if (fStatusBarController)
         fStatusBarController->UpdateLibraryStatus();

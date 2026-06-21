@@ -12,7 +12,7 @@
 class PlaylistLibrary;
 
 // Logical source types shown in the playlist sidebar.
-enum class PlaylistItemKind { Library, Playlist, Radio, DLNA };
+enum class PlaylistItemKind { Library, Playlist, Folder, Radio, DLNA };
 
 struct PlaylistRow {
   /** @name Data */
@@ -44,6 +44,7 @@ public:
   void RenameItem(const BString &oldName, const BString &newName);
 
   bool IsWritableAt(int32 index) const;
+  PlaylistItemKind KindAt(int32 index) const;
   void SetIsUnwritableAt(int32 index, bool v);
   void SetIsUnwritableByName(const BString &name, bool v);
   bool RemovePlaylistAt(int32 index);
@@ -86,6 +87,7 @@ private:
 
   mutable BBitmap *fIconLibrary = nullptr;
   mutable BBitmap *fIconPlaylist = nullptr;
+  mutable BBitmap *fIconFolder = nullptr;
   mutable BBitmap *fIconRadio = nullptr;
   mutable BBitmap *fIconDlna = nullptr;
 

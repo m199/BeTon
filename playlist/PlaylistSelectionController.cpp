@@ -8,14 +8,19 @@
 #include "LibraryBrowserController.h"
 #include "MainWindow.h"
 #include "Messages.h"
+#include "MetadataTagIO.h"
 #include "PlaylistLibrary.h"
+#include "PlaylistEditController.h"
 #include "RadioStationController.h"
 #include "SingleColumnListView.h"
 
+#include <Entry.h>
 #include <GroupView.h>
 #include <MenuItem.h>
 #include <Message.h>
+#include <Path.h>
 #include <String.h>
+#include <sys/stat.h>
 #include <TextControl.h>
 #include <vector>
 
@@ -42,6 +47,7 @@ void PlaylistSelectionController::HandlePlaylistSelection(BMessage *msg) {
 
   PlaylistItemKind kind = PlaylistKindFromSelection(msg, name);
   fWindow->fIsLibraryMode = (kind == PlaylistItemKind::Library);
+  fWindow->fIsFolderMode = (kind == PlaylistItemKind::Folder);
   fWindow->fIsRadioMode = (kind == PlaylistItemKind::Radio);
   fWindow->fIsDlnaMode = (kind == PlaylistItemKind::DLNA);
 
@@ -63,6 +69,10 @@ void PlaylistSelectionController::RestoreInitialPlaylistSelection() {
   if (!fWindow->fInitialViewMode.IsEmpty()) {
     if (fWindow->fInitialViewMode == "Playlist" &&
         !fWindow->fInitialPlaylistName.IsEmpty()) {
+      res = fWindow->fPlaylistLibrary->View()->SelectByName(
+          fWindow->fInitialPlaylistName);
+    } else if (fWindow->fInitialViewMode == "Folder" &&
+               !fWindow->fInitialPlaylistName.IsEmpty()) {
       res = fWindow->fPlaylistLibrary->View()->SelectByName(
           fWindow->fInitialPlaylistName);
     } else {
@@ -90,6 +100,9 @@ PlaylistItemKind PlaylistSelectionController::PlaylistKindFromSelection(
 
   if (name == "Library")
     return PlaylistItemKind::Library;
+  if (fWindow->fPlaylistLibrary &&
+      fWindow->fPlaylistLibrary->IsFolderSource(name))
+    return PlaylistItemKind::Folder;
   if (name == "Radio")
     return PlaylistItemKind::Radio;
   if (name == "DLNA")
@@ -145,6 +158,8 @@ void PlaylistSelectionController::ShowSelectedPlaylistSource(
       fWindow->fDlnaController->ShowPlaylistSource();
   } else if (fWindow->fIsLibraryMode) {
     ShowLibraryPlaylistSource();
+  } else if (fWindow->fIsFolderMode) {
+    ShowFolderPlaylistSource(name);
   } else {
     ShowRegularPlaylistSource(name);
   }
@@ -186,6 +201,78 @@ void PlaylistSelectionController::ShowRegularPlaylistSource(const BString &name)
   std::vector<BString> paths = fWindow->fPlaylistLibrary->LoadPlaylist(name);
   fWindow->fLibraryManager->SetActivePaths(paths);
   fWindow->UpdateFilteredViews();
+}
+
+void PlaylistSelectionController::ShowFolderPlaylistSource(const BString &name) {
+  if (fWindow->fDlnaController)
+    fWindow->fDlnaController->SetServerFieldVisible(false);
+  fWindow->fLibraryManager->ContentView()->SetRadioMode(false);
+  fWindow->fLibraryManager->SetRadioFilterMode(false);
+
+  BString folderPath = fWindow->fPlaylistLibrary->FolderPathForName(name);
+  std::vector<MediaItem> items;
+  std::vector<BString> paths;
+
+  BEntry entry(folderPath.String(), true);
+  entry_ref ref;
+  if (entry.InitCheck() == B_OK && entry.Exists() &&
+      entry.GetRef(&ref) == B_OK && fWindow->fPlaylistEditController) {
+    fWindow->fPlaylistEditController->ResolveRefRecursively(ref, paths);
+  }
+
+  items.reserve(paths.size());
+  for (const auto &path : paths) {
+    MediaItem item;
+    item.path = path;
+
+    BPath bpath(path.String());
+    BPath parentPath;
+    if (bpath.GetParent(&parentPath) == B_OK)
+      item.base = parentPath.Path();
+    else
+      item.base = folderPath;
+    item.title = bpath.Leaf() ? bpath.Leaf() : path.String();
+
+    struct stat st;
+    if (stat(path.String(), &st) == 0) {
+      item.size = st.st_size;
+      item.mtime = st.st_mtime;
+      item.inode = st.st_ino;
+    } else {
+      item.missing = true;
+    }
+
+    TagData td;
+    if (MetadataTagIO::ReadTags(bpath, td)) {
+      if (!td.title.IsEmpty())
+        item.title = td.title;
+      item.artist = td.artist;
+      item.album = td.album;
+      item.albumArtist = td.albumArtist;
+      item.composer = td.composer;
+      item.genre = td.genre;
+      item.comment = td.comment;
+      item.mbTrackId = td.mbTrackID;
+      item.mbAlbumId = td.mbAlbumID;
+      item.mbArtistId = td.mbArtistID;
+      item.year = td.year;
+      item.track = td.track;
+      item.trackTotal = td.trackTotal;
+      item.disc = td.disc;
+      item.discTotal = td.discTotal;
+      item.duration = td.lengthSec;
+      item.bitrate = td.bitrate;
+      item.sampleRate = td.sampleRate;
+      item.channels = td.channels;
+      item.rating = td.rating;
+    }
+
+    items.push_back(item);
+  }
+
+  fWindow->fLibraryManager->SetActiveItems(items);
+  fWindow->UpdateFilteredViews();
+  fWindow->fLibraryManager->ContentView()->SetPlaylistMode(false);
 }
 
 void PlaylistSelectionController::ResetAndHideFilters() {

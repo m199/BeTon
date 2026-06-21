@@ -289,7 +289,7 @@ void LibraryBrowserController::SetRadioFilterMode(bool radio) {
 void LibraryBrowserController::UpdateFilteredViews(
     const std::vector<MediaItem> &allItems, bool isLibraryMode,
     const BString &currentContext, const BString &filterText,
-    bool preserveScroll, bool updateContentList) {
+    bool preserveScroll, bool updateContentList, bool showPlaylistSort) {
 
   bigtime_t tStart = system_time();
 
@@ -531,7 +531,7 @@ void LibraryBrowserController::UpdateFilteredViews(
   /// 6. Update Content View
   size_t finalCount = finalItems.size();
   if (updateContentList) {
-    fContentView->SetPlaylistMode(!isLibraryMode);
+    fContentView->SetPlaylistMode(showPlaylistSort);
     if (restoreFilters && fSavedStates.count(currentContext) > 0) {
       FilterState &state = fSavedStates[currentContext];
       if (!state.sortState.IsEmpty())

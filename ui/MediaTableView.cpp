@@ -174,6 +174,67 @@ public:
         }
       }
 
+      BColumn *column = nullptr;
+      float colLeft = 16.0f;
+      int32 colIdx = -1;
+      for (int32 i = 0; i < fOwner->CountColumns(); ++i) {
+        BColumn *c = fOwner->ColumnAt(i);
+        if (!c || !c->IsVisible())
+          continue;
+        if (where.x >= colLeft && where.x < colLeft + c->Width()) {
+          column = c;
+          colIdx = c->LogicalFieldNum();
+          break;
+        }
+        colLeft += c->Width();
+      }
+
+      if (column && row && fOwner->fFastEditEnabled && colIdx == 11) {
+        MediaRow *mr = dynamic_cast<MediaRow *>(row);
+        if (mr) {
+          float xInCol = where.x - colLeft;
+          float starWidth = be_plain_font->StringWidth("★★★★★") / 5.0f;
+          float xInStars = xInCol - 16.0f; // 16px total margin (cell padding + BStringColumn margin)
+          if (starWidth > 0.0f) {
+            int32 rating = 0;
+            if (xInStars >= 0.0f) {
+              int32 star = (int32)(xInStars / starWidth);
+              star = std::max((int32)0, std::min((int32)4, star));
+              float xInStar = xInStars - (starWidth * star);
+              rating = star * 2 + (xInStar < starWidth / 2.0f ? 1 : 2);
+            }
+
+            if (rating == mr->Item().rating)
+              rating = 0;
+
+            if (!isSelected) {
+              fOwner->DeselectAll();
+              fOwner->AddToSelection(row);
+            }
+
+            DEBUG_PRINT("Rating click: xInCol=%.1f, xInStars=%.1f, starWidth=%.1f, rating=%d\n",
+                        xInCol, xInStars, starWidth, (int)rating);
+
+            MediaItem updatedItem = mr->Item();
+            updatedItem.rating = rating;
+            fOwner->UpdateItem(updatedItem);
+
+            BMessage setRatingMsg(MSG_SET_RATING);
+            setRatingMsg.AddInt32("rating", rating);
+
+            BMessage filesMsg;
+            entry_ref ref;
+            if (get_ref_for_path(mr->Item().path.String(), &ref) == B_OK)
+              filesMsg.AddRef("refs", &ref);
+            setRatingMsg.AddMessage("files", &filesMsg);
+
+            if (fOwner->Window())
+              fOwner->Window()->PostMessage(&setRatingMsg);
+            return B_SKIP_MESSAGE;
+          }
+        }
+      }
+
       if (isSelected) {
         BPoint p;
         uint32 btns;
@@ -195,62 +256,9 @@ public:
           v->GetMouse(&p, &btns);
         }
 
-        BColumn *column = nullptr;
-        float colLeft = 16.0f;
-        int32 colIdx = -1;
-        for (int32 i = 0; i < fOwner->CountColumns(); ++i) {
-          BColumn *c = fOwner->ColumnAt(i);
-          if (!c->IsVisible())
-            continue;
-          if (where.x >= colLeft && where.x < colLeft + c->Width()) {
-            column = c;
-            colIdx = c->LogicalFieldNum();
-            break;
-          }
-          colLeft += c->Width();
-        }
-
         if (column && row && fOwner->fFastEditEnabled) {
           MediaRow *mr = dynamic_cast<MediaRow *>(row);
           if (mr) {
-            if (colIdx == 11) {
-              float xInCol = where.x - colLeft;
-              float starWidth = be_plain_font->StringWidth("★★★★★") / 5.0f;
-              float xInStars = xInCol - 16.0f; // 16px total margin (cell padding + BStringColumn margin)
-              if (starWidth > 0.0f) {
-                int32 rating = 0;
-                if (xInStars >= 0.0f) {
-                  int32 star = (int32)(xInStars / starWidth);
-                  star = std::max((int32)0, std::min((int32)4, star));
-                  float xInStar = xInStars - (starWidth * star);
-                  rating = star * 2 + (xInStar < starWidth / 2.0f ? 1 : 2);
-                }
-
-                int32 currentRating = mr->Item().rating;
-                if (rating == currentRating) {
-                  rating = 0;
-                }
-
-                DEBUG_PRINT("Rating click: xInCol=%.1f, xInStars=%.1f, starWidth=%.1f, rating=%d\n",
-                            xInCol, xInStars, starWidth, (int)rating);
-
-                BMessage setRatingMsg(MSG_SET_RATING);
-                setRatingMsg.AddInt32("rating", rating);
-
-                BMessage filesMsg;
-                entry_ref ref;
-                if (get_ref_for_path(mr->Item().path.String(), &ref) == B_OK) {
-                  filesMsg.AddRef("refs", &ref);
-                }
-                setRatingMsg.AddMessage("files", &filesMsg);
-
-                if (fOwner->Window()) {
-                  fOwner->Window()->PostMessage(&setRatingMsg);
-                }
-                return B_SKIP_MESSAGE;
-              }
-            }
-
             BString path = mr->Item().path;
             bool isRemote = path.StartsWith("http://") || path.StartsWith("https://") || path.StartsWith("dlna://");
             if (!isRemote && fOwner->FieldNameForColumn(colIdx) != nullptr) {
@@ -1195,8 +1203,12 @@ bool MediaTableView::InitiateDrag(BPoint point, bool wasSelected) {
 
   BRow *firstSelected = CurrentSelection();
   if (firstSelected) {
-    fDragSourceIndex = IndexOf(firstSelected);
-    dragMsg.AddInt32("source_index", fDragSourceIndex);
+    bool canReorder = false;
+    if (auto *mw = dynamic_cast<MainWindow *>(Window()))
+      canReorder = mw->IsPlaylistSelected();
+    fDragSourceIndex = canReorder ? IndexOf(firstSelected) : -1;
+    if (fDragSourceIndex >= 0)
+      dragMsg.AddInt32("source_index", fDragSourceIndex);
   } else {
     fDragSourceIndex = -1;
   }
@@ -1246,6 +1258,13 @@ void MediaTableView::KeyDown(const char *bytes, int32 numBytes) {
       currentMsg->FindInt32("modifiers", (int32 *)&modifiers);
 
     if (modifiers & B_OPTION_KEY) {
+      bool canReorder = false;
+      if (auto *mw = dynamic_cast<MainWindow *>(Window()))
+        canReorder = mw->IsPlaylistSelected();
+      if (!canReorder) {
+        BColumnListView::KeyDown(bytes, numBytes);
+        return;
+      }
       if (bytes[0] == B_UP_ARROW) {
         BMessage msg(MSG_MOVE_UP);
         BRow *row = CurrentSelection();
@@ -1472,8 +1491,10 @@ void MediaTableView::MessageReceived(BMessage *msg) {
       }
 
       bool inPlaylist = false;
+      bool inFolder = false;
       if (auto *mw = dynamic_cast<MainWindow *>(Window())) {
         inPlaylist = mw->IsPlaylistSelected();
+        inFolder = mw->IsFolderMode();
       }
 
       if (inPlaylist) {
@@ -1494,6 +1515,11 @@ void MediaTableView::MessageReceived(BMessage *msg) {
         }
         menu.AddItem(new BMenuItem(B_TRANSLATE("Remove from Playlist"),
                                    new BMessage(MSG_DELETE_ITEM)));
+      }
+
+      if (inPlaylist || inFolder) {
+        if (!inPlaylist)
+          menu.AddSeparatorItem();
         menu.AddItem(new BMenuItem(B_TRANSLATE("Move To..."),
                                    new BMessage(MSG_MOVE_TO)));
         menu.AddItem(new BMenuItem(B_TRANSLATE("Move to Trash"),
@@ -2039,17 +2065,25 @@ void MediaTableView::StartCellEdit(BRow *row, BColumn *column, int32 colIdx, flo
   editor->SetTarget(this);
 
   targetView->AddChild(editor);
-  
+
   fActiveEditor = editor;
   fEditingRow = row;
   fEditingColumn = column;
   fEditingColIdx = colIdx;
   fEditingOutlineView = targetView;
 
-  editor->MakeFocus(true);
-  if (editor->TextView()) {
-    editor->TextView()->SelectAll();
+  BPoint scrollPos(0, 0);
+  if (BView *outline = ScrollView()) {
+    scrollPos.x = outline->Bounds().left;
+    scrollPos.y = outline->Bounds().top;
   }
+
+  editor->MakeFocus(true);
+  if (editor->TextView())
+    editor->TextView()->SelectAll();
+
+  if (BView *outline = ScrollView())
+    outline->ScrollTo(scrollPos);
 }
 
 void MediaTableView::CommitCellEdit() {
@@ -2061,10 +2095,38 @@ void MediaTableView::CommitCellEdit() {
 
   BString newText = editor->Text();
 
-  if (editor->Parent()) {
-    editor->Parent()->RemoveChild(editor);
+  BString originalText;
+  if (fEditingRow) {
+    BField *field = fEditingRow->GetField(fEditingColIdx);
+    if (auto *sf = dynamic_cast<BStringField *>(field))
+      originalText = sf->String();
+    else if (auto *ifld = dynamic_cast<BIntegerField *>(field))
+      originalText << ifld->Value();
+    if (fEditingColIdx == 10 && !fEditingPathPrefix.IsEmpty())
+      originalText.Prepend(fEditingPathPrefix);
   }
+
+  BPoint scrollPos(0, 0);
+  if (BView *outline = ScrollView()) {
+    scrollPos.x = outline->Bounds().left;
+    scrollPos.y = outline->Bounds().top;
+  }
+
+  if (editor->Parent())
+    editor->Parent()->RemoveChild(editor);
   delete editor;
+
+  if (BView *outline = ScrollView())
+    outline->ScrollTo(scrollPos);
+
+  if (newText == originalText) {
+    fEditingRow = nullptr;
+    fEditingColumn = nullptr;
+    fEditingColIdx = -1;
+    fEditingOutlineView = nullptr;
+    fEditingPathPrefix = "";
+    return;
+  }
 
   if (fEditingRow) {
     MediaRow *mr = dynamic_cast<MediaRow *>(fEditingRow);
@@ -2091,10 +2153,8 @@ void MediaTableView::CommitCellEdit() {
           BMessage saveMsg(MSG_PROP_SAVE);
           saveMsg.AddString("file", path);
           saveMsg.AddString(fieldName, newText);
-
-          if (Window()) {
+          if (Window())
             Window()->PostMessage(&saveMsg);
-          }
         }
       }
     }

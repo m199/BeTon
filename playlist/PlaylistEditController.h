@@ -34,12 +34,12 @@ public:
   void RestorePlaylistPaths(BMessage *msg);
   void CreatePlaylistWithPaths(BMessage *msg);
   void DeletePlaylistByName(BMessage *msg);
+  void ResolveRefRecursively(const struct entry_ref &ref,
+                             std::vector<BString> &outPaths);
 
 private:
   MainWindow *fWindow;
   BMessage fPendingPlaylistFiles;
-
-  void ResolveRefRecursively(const struct entry_ref &ref, std::vector<BString> &outPaths);
 };
 
 #endif // BETON_PLAYLIST_EDIT_CONTROLLER_H

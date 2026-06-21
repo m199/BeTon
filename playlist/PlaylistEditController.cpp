@@ -761,6 +761,11 @@ void PlaylistEditController::GenerateSmartPlaylist(BMessage *msg) {
 }
 
 void PlaylistEditController::DeleteSelectedPlaylistItems() {
+  if (fWindow->fCurrentPlaylistName.IsEmpty() ||
+      !fWindow->fPlaylistLibrary->IsPlaylistWritable(fWindow->fCurrentPlaylistName)) {
+    return;
+  }
+
   std::vector<BString> removedPaths;
 
   BRow *row = nullptr;
@@ -819,10 +824,11 @@ void PlaylistEditController::DeleteSelectedPlaylistItems() {
 }
 
 void PlaylistEditController::MoveSelectedItemsToTrash() {
-  if (fWindow->fCurrentPlaylistName.IsEmpty() ||
-      !fWindow->fPlaylistLibrary->IsPlaylistWritable(fWindow->fCurrentPlaylistName)) {
+  bool updatesPlaylist =
+      !fWindow->fCurrentPlaylistName.IsEmpty() &&
+      fWindow->fPlaylistLibrary->IsPlaylistWritable(fWindow->fCurrentPlaylistName);
+  if (!updatesPlaylist && !fWindow->fIsFolderMode)
     return;
-  }
 
   MediaTableView *cv = fWindow->fLibraryManager->ContentView();
   std::vector<BString> selectedPaths;
@@ -846,8 +852,10 @@ void PlaylistEditController::MoveSelectedItemsToTrash() {
   std::vector<BMessage> undoMsgs;
   std::vector<BMessage> redoMsgs;
 
-  // 1. Save before paths of the playlist
-  std::vector<BString> beforePaths = fWindow->fPlaylistLibrary->LoadPlaylist(fWindow->fCurrentPlaylistName);
+  // 1. Save before paths of the playlist when the current source is a playlist.
+  std::vector<BString> beforePaths;
+  if (updatesPlaylist)
+    beforePaths = fWindow->fPlaylistLibrary->LoadPlaylist(fWindow->fCurrentPlaylistName);
 
   // 2. Move files to trash
   for (const auto &path : selectedPaths) {
@@ -906,14 +914,17 @@ void PlaylistEditController::MoveSelectedItemsToTrash() {
 
   // 3. Compute after paths of the playlist (remove selected ones)
   std::vector<BString> afterPaths;
-  for (const auto &p : beforePaths) {
-    if (std::find(selectedPaths.begin(), selectedPaths.end(), p) == selectedPaths.end()) {
-      afterPaths.push_back(p);
+  if (updatesPlaylist) {
+    for (const auto &p : beforePaths) {
+      if (std::find(selectedPaths.begin(), selectedPaths.end(), p) ==
+          selectedPaths.end()) {
+        afterPaths.push_back(p);
+      }
     }
-  }
 
-  // Save the new playlist on disk
-  fWindow->fPlaylistLibrary->SavePlaylist(fWindow->fCurrentPlaylistName, afterPaths);
+    // Save the new playlist on disk
+    fWindow->fPlaylistLibrary->SavePlaylist(fWindow->fCurrentPlaylistName, afterPaths);
+  }
   
   // Refresh the active ColumnView
   int32 selected = fWindow->fPlaylistLibrary->View()->CurrentSelection();
@@ -925,19 +936,21 @@ void PlaylistEditController::MoveSelectedItemsToTrash() {
   }
 
   // 4. Record playlist changes
-  BMessage uPlaylist(MSG_RESTORE_PLAYLIST_PATHS);
-  uPlaylist.AddString("playlist", fWindow->fCurrentPlaylistName);
-  for (const auto &p : beforePaths) {
-    uPlaylist.AddString("paths", p);
-  }
-  undoMsgs.push_back(uPlaylist);
+  if (updatesPlaylist) {
+    BMessage uPlaylist(MSG_RESTORE_PLAYLIST_PATHS);
+    uPlaylist.AddString("playlist", fWindow->fCurrentPlaylistName);
+    for (const auto &p : beforePaths) {
+      uPlaylist.AddString("paths", p);
+    }
+    undoMsgs.push_back(uPlaylist);
 
-  BMessage rPlaylist(MSG_RESTORE_PLAYLIST_PATHS);
-  rPlaylist.AddString("playlist", fWindow->fCurrentPlaylistName);
-  for (const auto &p : afterPaths) {
-    rPlaylist.AddString("paths", p);
+    BMessage rPlaylist(MSG_RESTORE_PLAYLIST_PATHS);
+    rPlaylist.AddString("playlist", fWindow->fCurrentPlaylistName);
+    for (const auto &p : afterPaths) {
+      rPlaylist.AddString("paths", p);
+    }
+    redoMsgs.push_back(rPlaylist);
   }
-  redoMsgs.push_back(rPlaylist);
 
   // 5. Register with UndoManager
   if (fWindow->fUndoManager) {
@@ -1036,10 +1049,11 @@ void PlaylistEditController::HandleMoveToFolderSelected(BMessage *msg) {
 }
 
 void PlaylistEditController::MoveSelectedItemsTo(const entry_ref *targetDirRef) {
-  if (fWindow->fCurrentPlaylistName.IsEmpty() ||
-      !fWindow->fPlaylistLibrary->IsPlaylistWritable(fWindow->fCurrentPlaylistName)) {
+  bool updatesPlaylist =
+      !fWindow->fCurrentPlaylistName.IsEmpty() &&
+      fWindow->fPlaylistLibrary->IsPlaylistWritable(fWindow->fCurrentPlaylistName);
+  if (!updatesPlaylist && !fWindow->fIsFolderMode)
     return;
-  }
 
   MediaTableView *cv = fWindow->fLibraryManager->ContentView();
   std::vector<BString> selectedPaths;
@@ -1069,8 +1083,10 @@ void PlaylistEditController::MoveSelectedItemsTo(const entry_ref *targetDirRef) 
   std::vector<BMessage> undoMsgs;
   std::vector<BMessage> redoMsgs;
 
-  // 1. Save before paths of the playlist
-  std::vector<BString> beforePaths = fWindow->fPlaylistLibrary->LoadPlaylist(fWindow->fCurrentPlaylistName);
+  // 1. Save before paths of the playlist when the current source is a playlist.
+  std::vector<BString> beforePaths;
+  if (updatesPlaylist)
+    beforePaths = fWindow->fPlaylistLibrary->LoadPlaylist(fWindow->fCurrentPlaylistName);
 
   // 2. Move files to target directory
   for (const auto &path : selectedPaths) {
@@ -1131,17 +1147,19 @@ void PlaylistEditController::MoveSelectedItemsTo(const entry_ref *targetDirRef) 
 
   // 3. Compute after paths of the playlist (substitute paths)
   std::vector<BString> afterPaths;
-  for (const auto &p : beforePaths) {
-    auto it = movedPathsMap.find(p);
-    if (it != movedPathsMap.end()) {
-      afterPaths.push_back(it->second);
-    } else {
-      afterPaths.push_back(p);
+  if (updatesPlaylist) {
+    for (const auto &p : beforePaths) {
+      auto it = movedPathsMap.find(p);
+      if (it != movedPathsMap.end()) {
+        afterPaths.push_back(it->second);
+      } else {
+        afterPaths.push_back(p);
+      }
     }
-  }
 
-  // Save the new playlist on disk
-  fWindow->fPlaylistLibrary->SavePlaylist(fWindow->fCurrentPlaylistName, afterPaths);
+    // Save the new playlist on disk
+    fWindow->fPlaylistLibrary->SavePlaylist(fWindow->fCurrentPlaylistName, afterPaths);
+  }
   
   // Refresh the active ColumnView
   int32 selected = fWindow->fPlaylistLibrary->View()->CurrentSelection();
@@ -1153,19 +1171,21 @@ void PlaylistEditController::MoveSelectedItemsTo(const entry_ref *targetDirRef) 
   }
 
   // 4. Record playlist changes
-  BMessage uPlaylist(MSG_RESTORE_PLAYLIST_PATHS);
-  uPlaylist.AddString("playlist", fWindow->fCurrentPlaylistName);
-  for (const auto &p : beforePaths) {
-    uPlaylist.AddString("paths", p);
-  }
-  undoMsgs.push_back(uPlaylist);
+  if (updatesPlaylist) {
+    BMessage uPlaylist(MSG_RESTORE_PLAYLIST_PATHS);
+    uPlaylist.AddString("playlist", fWindow->fCurrentPlaylistName);
+    for (const auto &p : beforePaths) {
+      uPlaylist.AddString("paths", p);
+    }
+    undoMsgs.push_back(uPlaylist);
 
-  BMessage rPlaylist(MSG_RESTORE_PLAYLIST_PATHS);
-  rPlaylist.AddString("playlist", fWindow->fCurrentPlaylistName);
-  for (const auto &p : afterPaths) {
-    rPlaylist.AddString("paths", p);
+    BMessage rPlaylist(MSG_RESTORE_PLAYLIST_PATHS);
+    rPlaylist.AddString("playlist", fWindow->fCurrentPlaylistName);
+    for (const auto &p : afterPaths) {
+      rPlaylist.AddString("paths", p);
+    }
+    redoMsgs.push_back(rPlaylist);
   }
-  redoMsgs.push_back(rPlaylist);
 
   // 5. Register with UndoManager
   if (fWindow->fUndoManager) {
@@ -1176,6 +1196,3 @@ void PlaylistEditController::MoveSelectedItemsTo(const entry_ref *targetDirRef) 
   statusMsg.SetToFormat(B_TRANSLATE("Moved %zu items to %s."), selectedPaths.size(), targetDirPath.Leaf());
   fWindow->UpdateStatus(statusMsg);
 }
-
-
-

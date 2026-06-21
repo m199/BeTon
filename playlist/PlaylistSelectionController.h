@@ -23,6 +23,7 @@ private:
   void ShowRadioPlaylistSource();
   void ShowLibraryPlaylistSource();
   void ShowRegularPlaylistSource(const BString &name);
+  void ShowFolderPlaylistSource(const BString &name);
 
   MainWindow *fWindow;
 };

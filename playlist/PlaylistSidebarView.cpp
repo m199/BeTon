@@ -28,6 +28,7 @@ static constexpr int32 ICON_LIB_ID = 1001;
 static constexpr int32 ICON_PL_ID = 1002;
 static constexpr int32 ICON_RADIO_ID = 1003;
 static constexpr int32 ICON_DLNA_ID = 1004;
+static constexpr int32 ICON_FOLDER_ID = 1006;
 
 static BBitmap *LoadVectorIconFromResourceID(int32 id, float size) {
   if (!be_app || !be_app->AppResources())
@@ -81,6 +82,9 @@ void PlaylistSidebarView::SelectionChanged(int32 index) {
     BMessage msg(MSG_PLAYLIST_SELECTION);
     msg.AddInt32("index", index);
     msg.AddString("name", ItemAt(index));
+    if ((size_t)index < fRows.size())
+      msg.AddInt32("kind", (int32)fRows[index].kind);
+    msg.AddString("path", PathAt(index));
 
     fTarget.SendMessage(&msg);
 
@@ -112,14 +116,60 @@ void PlaylistSidebarView::MessageReceived(BMessage *msg) {
     if (!msg->HasRef("refs"))
       break;
 
+    bool allRefsAreDirectories = true;
+    bool hasDirectoryRef = false;
+    entry_ref droppedRef;
+    for (int32 i = 0; msg->FindRef("refs", i, &droppedRef) == B_OK; ++i) {
+      BEntry entry(&droppedRef, true);
+      if (entry.InitCheck() != B_OK || !entry.Exists() ||
+          !entry.IsDirectory()) {
+        allRefsAreDirectories = false;
+        break;
+      }
+      hasDirectoryRef = true;
+    }
+
     int32 dropIndex = (int32)(fLastDropPoint.y / LineHeight());
     if (dropIndex < 0 || dropIndex >= CountItems()) {
-
-      BMessage newMsg(MSG_NEW_PLAYLIST);
-      newMsg.AddMessage("files", msg);
-      fTarget.SendMessage(&newMsg);
+      if (hasDirectoryRef && allRefsAreDirectories && fManager) {
+        int32 lastAdded = -1;
+        for (int32 i = 0; msg->FindRef("refs", i, &droppedRef) == B_OK; ++i) {
+          BEntry entry(&droppedRef, true);
+          BPath path;
+          if (entry.GetPath(&path) == B_OK)
+            lastAdded = fManager->AddFolderSource(path.Path());
+        }
+        if (lastAdded >= 0) {
+          Select(lastAdded);
+          SelectionChanged(lastAdded);
+          BMessage changed(MSG_PLAYLIST_ORDER_CHANGED);
+          fTarget.SendMessage(&changed);
+        }
+      } else {
+        BMessage newMsg(MSG_NEW_PLAYLIST);
+        newMsg.AddMessage("files", msg);
+        fTarget.SendMessage(&newMsg);
+      }
     } else {
       if (!IsWritableAt(dropIndex)) {
+        if (hasDirectoryRef && allRefsAreDirectories && fManager) {
+          int32 lastAdded = -1;
+          for (int32 i = 0; msg->FindRef("refs", i, &droppedRef) == B_OK;
+               ++i) {
+            BEntry entry(&droppedRef, true);
+            BPath path;
+            if (entry.GetPath(&path) == B_OK)
+              lastAdded = fManager->AddFolderSource(path.Path());
+          }
+          if (lastAdded >= 0) {
+            Select(lastAdded);
+            SelectionChanged(lastAdded);
+            BMessage changed(MSG_PLAYLIST_ORDER_CHANGED);
+            fTarget.SendMessage(&changed);
+          }
+          SetHoverIndex(-1);
+          break;
+        }
         DEBUG_PRINT("Drop on non-writable playlist -> "
                     "ignored (idx=%ld)\n",
                     (long)dropIndex);
@@ -204,12 +254,14 @@ void PlaylistSidebarView::MouseDown(BPoint where) {
     delete fContextMenu;
     fContextMenu = new BPopUpMenu("PlaylistMenu");
 
-    if (!IsWritableAt(index)) {
-
-    } else {
+    if (IsWritableAt(index)) {
       fContextMenu->AddItem(new BMenuItem(B_TRANSLATE("Rename"),
                                           new BMessage(MSG_RENAME_PLAYLIST)));
       fContextMenu->AddItem(new BMenuItem(B_TRANSLATE("Delete"),
+                                          new BMessage(MSG_DELETE_PLAYLIST)));
+    } else if ((size_t)index < fRows.size() &&
+               fRows[index].kind == PlaylistItemKind::Folder) {
+      fContextMenu->AddItem(new BMenuItem(B_TRANSLATE("Remove"),
                                           new BMessage(MSG_DELETE_PLAYLIST)));
     }
 
@@ -332,11 +384,15 @@ void PlaylistSidebarView::AddFileToPlaylist(int32 index, const entry_ref &ref) {
 void PlaylistSidebarView::RemoveSelectedPlaylist() {
   int32 index = CurrentSelection();
   if (index > 0 && index < CountItems()) {
-    if (!IsWritableAt(index))
+    PlaylistItemKind kind = KindAt(index);
+    if (!IsWritableAt(index) && kind != PlaylistItemKind::Folder)
       return;
     BString name = ItemAt(index);
     if (fManager) {
-      fManager->DeletePlaylist(name);
+      if (kind == PlaylistItemKind::Folder)
+        fManager->RemoveFolderSource(name);
+      else
+        fManager->DeletePlaylist(name);
     }
     SingleColumnListView::RemoveItemAt(index);
     if ((size_t)index < fRows.size())
@@ -344,7 +400,9 @@ void PlaylistSidebarView::RemoveSelectedPlaylist() {
     fCurrentSelection = -1;
     UpdateScrollbars();
     Invalidate();
-    DEBUG_PRINT("Playlist '%s' deleted\n", name.String());
+    BMessage changed(MSG_PLAYLIST_ORDER_CHANGED);
+    fTarget.SendMessage(&changed);
+    DEBUG_PRINT("Playlist source '%s' deleted\n", name.String());
   }
 }
 
@@ -392,6 +450,11 @@ void PlaylistSidebarView::_EnsureIconsLoaded() const {
   }
   if (!fIconPlaylist)
     fIconPlaylist = LoadVectorIconFromResourceID(ICON_PL_ID, fIconSize);
+  if (!fIconFolder) {
+    fIconFolder = LoadVectorIconFromResourceID(ICON_FOLDER_ID, fIconSize);
+    if (!fIconFolder)
+      fIconFolder = fIconPlaylist;
+  }
   if (!fIconRadio) {
     fIconRadio = LoadVectorIconFromResourceID(ICON_RADIO_ID, fIconSize);
     if (!fIconRadio)
@@ -411,6 +474,8 @@ BBitmap *PlaylistSidebarView::_IconFor(PlaylistItemKind kind) const {
     return fIconLibrary;
   case PlaylistItemKind::Playlist:
     return fIconPlaylist;
+  case PlaylistItemKind::Folder:
+    return fIconFolder;
   case PlaylistItemKind::Radio:
     return fIconRadio;
   case PlaylistItemKind::DLNA:
@@ -425,6 +490,14 @@ bool PlaylistSidebarView::IsWritableAt(int32 index) const {
   if ((size_t)index >= fRows.size())
     return false;
   return fRows[index].writable;
+}
+
+PlaylistItemKind PlaylistSidebarView::KindAt(int32 index) const {
+  if (index < 0 || index >= CountItems())
+    return PlaylistItemKind::Playlist;
+  if ((size_t)index >= fRows.size())
+    return PlaylistItemKind::Playlist;
+  return fRows[index].kind;
 }
 
 void PlaylistSidebarView::SetIsUnwritableAt(int32 index, bool v) {

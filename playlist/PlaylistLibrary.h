@@ -20,6 +20,13 @@ public:
   void SavePlaylist(const BString &name, const std::vector<BString> &paths);
 
   void AddPlaylistEntry(const BString &name, const BString &fullPath);
+  int32 AddFolderSource(const BString &path, const BString &label = "");
+  bool RemoveFolderSource(const BString &name);
+  bool RenameFolderSource(const BString &oldName, const BString &newName);
+  BString FolderPathForName(const BString &name) const;
+  bool IsFolderSource(const BString &name) const;
+  void SaveFolderSources(BMessage &out) const;
+  void LoadFolderSources(const BMessage &in);
   void CreateNewPlaylist(const BString &name);
   void CreatePlaylistFile(const BString &name);
   void RenamePlaylist(const BString &oldName, const BString &newName);
@@ -40,6 +47,11 @@ private:
   PlaylistSidebarView *fPlaylistView;
   BMessenger fTarget;
   BString fPlaylistBasePath;
+  struct FolderSource {
+    BString label;
+    BString path;
+  };
+  std::vector<FolderSource> fFolderSources;
   ///@}
 };
 

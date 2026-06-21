@@ -377,10 +377,16 @@ void LibraryController::HandleMediaBatch(BMessage *msg) {
  */
 void LibraryController::RefreshPartialViews() {
   DEBUG_PRINT("Debounced partial view refresh triggered\n");
-  const auto &items = fWindow->fIsRadioMode ? fWindow->fRadioItems : fWindow->fAllItems;
+  const auto &items =
+      (fWindow->fIsRadioMode || fWindow->fIsDlnaMode)
+          ? fWindow->fRadioItems
+          : fWindow->fAllItems;
   fWindow->fLibraryManager->UpdateFilteredViews(
-      items, fWindow->fIsLibraryMode || fWindow->fIsRadioMode, fWindow->fCurrentPlaylistName,
-      fWindow->fSearchField->Text() ? fWindow->fSearchField->Text() : "", false, false);
+      items, fWindow->fIsLibraryMode || fWindow->fIsRadioMode ||
+                 fWindow->fIsDlnaMode,
+      fWindow->fCurrentPlaylistName,
+      fWindow->fSearchField->Text() ? fWindow->fSearchField->Text() : "",
+      false, false, fWindow->IsPlaylistSelected());
 }
 
 /**
@@ -670,4 +676,3 @@ void LibraryController::RevealInTracker(BMessage *msg) {
   else
     delete threadEntries;
 }
-

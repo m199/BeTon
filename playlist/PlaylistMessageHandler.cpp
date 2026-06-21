@@ -35,6 +35,11 @@ bool PlaylistMessageHandler::HandleMessage(BMessage *msg) {
     break;
   }
 
+  case MSG_PLAYLIST_ORDER_CHANGED: {
+    fWindow->SaveSettings();
+    break;
+  }
+
   case MSG_MOVE_TO_TRASH: {
     fWindow->fPlaylistEditController->MoveSelectedItemsToTrash();
     break;

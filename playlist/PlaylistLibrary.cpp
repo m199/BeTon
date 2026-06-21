@@ -8,6 +8,16 @@
 #include <Path.h>
 #include <stdio.h>
 
+static BString
+FolderLabelFromPath(const BString &path)
+{
+  BPath bpath(path.String());
+  const char *leaf = bpath.Leaf();
+  if (leaf && *leaf)
+    return BString(leaf);
+  return path;
+}
+
 PlaylistLibrary::PlaylistLibrary(BMessenger target) : fTarget(target) {
   fPlaylistView = new PlaylistSidebarView("playlist", fTarget, this);
 }
@@ -17,8 +27,10 @@ PlaylistLibrary::~PlaylistLibrary() {}
 PlaylistSidebarView *PlaylistLibrary::View() const { return fPlaylistView; }
 
 void PlaylistLibrary::LoadAvailablePlaylists() {
-  fPlaylistView->AddItem("Radio", false, PlaylistItemKind::Radio);
-  fPlaylistView->AddItem("DLNA", false, PlaylistItemKind::DLNA);
+  if (fPlaylistView->FindIndexByName("Radio") < 0)
+    fPlaylistView->AddItem("Radio", false, PlaylistItemKind::Radio);
+  if (fPlaylistView->FindIndexByName("DLNA") < 0)
+    fPlaylistView->AddItem("DLNA", false, PlaylistItemKind::DLNA);
 
   BPath path;
   if (find_directory(B_USER_SETTINGS_DIRECTORY, &path) != B_OK)
@@ -27,6 +39,7 @@ void PlaylistLibrary::LoadAvailablePlaylists() {
   if (fPlaylistBasePath.IsEmpty())
     return;
   path.SetTo(fPlaylistBasePath);
+  create_directory(path.Path(), 0777);
   BDirectory dir(path.Path());
   if (dir.InitCheck() != B_OK)
     return;
@@ -41,7 +54,29 @@ void PlaylistLibrary::LoadAvailablePlaylists() {
     if (name.EndsWith(".m3u"))
       name.Truncate(name.Length() - 4);
 
-    fPlaylistView->AddItem(name, filePath.Path());
+    if (fPlaylistView->FindIndexByName(name) < 0)
+      fPlaylistView->AddItem(name, filePath.Path());
+  }
+
+  for (auto &source : fFolderSources) {
+    int32 existingIndex = fPlaylistView->FindIndexByName(source.label);
+    if (existingIndex >= 0 &&
+        fPlaylistView->KindAt(existingIndex) == PlaylistItemKind::Folder &&
+        fPlaylistView->PathAt(existingIndex) == source.path) {
+      continue;
+    }
+
+    BString baseLabel = source.label;
+    BString visibleLabel = baseLabel;
+    int32 suffix = 2;
+    while (fPlaylistView->FindIndexByName(visibleLabel) >= 0) {
+      visibleLabel.SetToFormat("%s (%ld)", baseLabel.String(),
+                               (long)suffix++);
+    }
+    if (visibleLabel != source.label)
+      source.label = visibleLabel;
+    fPlaylistView->AddItem(source.label.String(), source.path.String(), false,
+                           PlaylistItemKind::Folder);
   }
 }
 
@@ -126,9 +161,100 @@ void PlaylistLibrary::AddPlaylistEntry(const BString &name,
   fPlaylistView->AddItem(name, fullPath);
 }
 
+int32 PlaylistLibrary::AddFolderSource(const BString &path,
+                                       const BString &label) {
+  for (const auto &source : fFolderSources) {
+    if (source.path == path) {
+      int32 index = fPlaylistView->FindIndexByName(source.label);
+      if (index >= 0)
+        return index;
+    }
+  }
+
+  BString baseLabel = label.IsEmpty() ? FolderLabelFromPath(path) : label;
+  baseLabel.Trim();
+  if (baseLabel.IsEmpty())
+    baseLabel = BString("Folder");
+
+  BString uniqueLabel = baseLabel;
+  int32 suffix = 2;
+  while (fPlaylistView->FindIndexByName(uniqueLabel) >= 0) {
+    uniqueLabel.SetToFormat("%s (%ld)", baseLabel.String(), (long)suffix++);
+  }
+
+  fFolderSources.push_back({uniqueLabel, path});
+  return fPlaylistView->AddItem(uniqueLabel.String(), path.String(), false,
+                                PlaylistItemKind::Folder);
+}
+
+bool PlaylistLibrary::RemoveFolderSource(const BString &name) {
+  for (auto it = fFolderSources.begin(); it != fFolderSources.end(); ++it) {
+    if (it->label == name) {
+      fFolderSources.erase(it);
+      return true;
+    }
+  }
+  return false;
+}
+
+bool PlaylistLibrary::RenameFolderSource(const BString &oldName,
+                                         const BString &newName) {
+  if (newName.IsEmpty())
+    return false;
+  for (auto &source : fFolderSources) {
+    if (source.label == oldName) {
+      source.label = newName;
+      fPlaylistView->RenameItem(oldName, newName);
+      return true;
+    }
+  }
+  return false;
+}
+
+BString PlaylistLibrary::FolderPathForName(const BString &name) const {
+  for (const auto &source : fFolderSources) {
+    if (source.label == name)
+      return source.path;
+  }
+  return "";
+}
+
+bool PlaylistLibrary::IsFolderSource(const BString &name) const {
+  return !FolderPathForName(name).IsEmpty();
+}
+
+void PlaylistLibrary::SaveFolderSources(BMessage &out) const {
+  for (const auto &source : fFolderSources) {
+    BMessage item;
+    item.AddString("label", source.label);
+    item.AddString("path", source.path);
+    out.AddMessage("folder_source", &item);
+  }
+}
+
+void PlaylistLibrary::LoadFolderSources(const BMessage &in) {
+  fFolderSources.clear();
+  BMessage item;
+  for (int32 i = 0; in.FindMessage("folder_source", i, &item) == B_OK; ++i) {
+    BString label;
+    BString path;
+    if (item.FindString("path", &path) != B_OK || path.IsEmpty()) {
+      item.MakeEmpty();
+      continue;
+    }
+    item.FindString("label", &label);
+    fFolderSources.push_back({label.IsEmpty() ? FolderLabelFromPath(path)
+                                              : label,
+                              path});
+    item.MakeEmpty();
+  }
+}
+
 void PlaylistLibrary::GetPlaylistNames(BMessage &out, bool onlyWritable) const {
   const int32 count = fPlaylistView->CountItems();
   for (int32 i = 0; i < count; ++i) {
+    if (fPlaylistView->KindAt(i) != PlaylistItemKind::Playlist)
+      continue;
     if (onlyWritable && !fPlaylistView->IsWritableAt(i))
       continue;
     BString name = fPlaylistView->ItemAt(i);

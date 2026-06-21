@@ -65,12 +65,14 @@ public:
    * @param filterText Search filter string (default empty).
    * @param preserveScroll If true, keeps previous content scroll position.
    * @param updateContentList If false, updates filters only and keeps content list untouched.
+   * @param showPlaylistSort True only for real playlist sources.
    */
   void UpdateFilteredViews(const std::vector<MediaItem> &allItems,
                            bool isLibraryMode, const BString &currentContext,
                            const BString &filterText = "",
                            bool preserveScroll = false,
-                           bool updateContentList = true);
+                           bool updateContentList = true,
+                           bool showPlaylistSort = false);
 
   /**
    * @brief Incrementally adds a media item (used during live scanning).

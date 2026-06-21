@@ -93,6 +93,7 @@ void SettingsController::SaveSettingsToMessage(BMessage &state) {
         fWindow->fPlaylistLibrary->View()->GetPlaylistOrder();
     for (const auto &name : playlistOrder)
       state.AddString("playlist_order", name);
+    fWindow->fPlaylistLibrary->SaveFolderSources(state);
   }
 
   fWindow->fLibraryManager->SaveSettings(&state);
@@ -108,6 +109,8 @@ void SettingsController::SaveSettingsToMessage(BMessage &state) {
     mode = "Radio";
   else if (fWindow->fIsDlnaMode)
     mode = "DLNA";
+  else if (fWindow->fIsFolderMode)
+    mode = "Folder";
   else if (!fWindow->fIsLibraryMode)
     mode = "Playlist";
 
@@ -174,6 +177,8 @@ void SettingsController::LoadSettingsFromMessage(BMessage &state) {
 
   if (state.FindString("playlist_path", &fWindow->fPlaylistPath) != B_OK)
     fWindow->fPlaylistPath = "";
+  if (fWindow->fPlaylistLibrary)
+    fWindow->fPlaylistLibrary->LoadFolderSources(state);
 
   state.FindBool("use_custom_seekbar_color", &fWindow->fUseCustomSeekBarColor);
   state.FindBool("use_seekbar_color_for_selection",

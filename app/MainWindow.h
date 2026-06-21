@@ -106,8 +106,9 @@ public:
   void UpdateStatus(const BString &text, bool isPermanent = false);
   /// True only for user playlists (not Library/Radio/DLNA sources).
   bool IsPlaylistSelected() const {
-    return !fIsLibraryMode && !fIsRadioMode && !fIsDlnaMode;
+    return !fIsLibraryMode && !fIsFolderMode && !fIsRadioMode && !fIsDlnaMode;
   }
+  bool IsFolderMode() const { return fIsFolderMode; }
   bool IsRadioMode() const { return fIsRadioMode; }
   bool IsDlnaMode() const { return fIsDlnaMode; }
 
@@ -180,6 +181,7 @@ private:
   std::vector<MediaItem> fAllItems;   ///< Complete database cache
   std::vector<MediaItem> fRadioItems; ///< Radio stations as MediaItems
   bool fIsLibraryMode = true; ///< True = All tracks, False = Playlist view
+  bool fIsFolderMode = false; ///< True = live folder source view
   bool fIsRadioMode = false;  ///< True = Radio station view
   bool fIsDlnaMode = false;   ///< True = DLNA server browsing view
   BString fPlaylistPath;
