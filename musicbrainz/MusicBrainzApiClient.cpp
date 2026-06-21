@@ -71,6 +71,250 @@ BLocker ScopedSilence::fLocker("SilenceLocker");
 using namespace MusicBrainz5;
 using namespace BPrivate::Network;
 
+static BString
+EscapeLuceneLiteral(const BString &input)
+{
+  BString escaped;
+  const char *text = input.String();
+  if (!text)
+    return escaped;
+
+  for (const char *p = text; *p; ++p) {
+    switch (*p) {
+    case '+':
+    case '-':
+    case '&':
+    case '|':
+    case '!':
+    case '(':
+    case ')':
+    case '{':
+    case '}':
+    case '[':
+    case ']':
+    case '^':
+    case '"':
+    case '~':
+    case '*':
+    case '?':
+    case ':':
+    case '\\':
+    case '/':
+      escaped << "\\";
+      break;
+    default:
+      break;
+    }
+    escaped << *p;
+  }
+
+  return escaped;
+}
+
+static int32
+ClampSearchLimit(int32 limit)
+{
+  if (limit < 1)
+    return 50;
+  if (limit > 100)
+    return 100;
+  return limit;
+}
+
+static void
+AppendAnd(BString &query)
+{
+  if (!query.IsEmpty())
+    query << " AND ";
+}
+
+static void
+AppendPhraseClause(BString &query, const char *field, const BString &value)
+{
+  if (!field || value.IsEmpty())
+    return;
+
+  AppendAnd(query);
+  query << field << ":\"" << EscapeLuceneLiteral(value) << "\"";
+}
+
+static void
+AppendNumberClause(BString &query, const char *field, int32 value)
+{
+  if (!field || value < 0)
+    return;
+
+  AppendAnd(query);
+  query << field << ":" << value;
+}
+
+static bool
+IsDateValueSafe(const BString &value)
+{
+  if (value.IsEmpty())
+    return false;
+
+  const char *text = value.String();
+  for (const char *p = text; *p; ++p) {
+    if (!std::isdigit((unsigned char)*p) && *p != '-')
+      return false;
+  }
+  return true;
+}
+
+static int32
+YearFromDateString(const BString &value)
+{
+  if (value.Length() < 4)
+    return 0;
+
+  const char *text = value.String();
+  for (int32 i = 0; i < 4; ++i) {
+    if (!std::isdigit((unsigned char)text[i]))
+      return 0;
+  }
+
+  BString yearText;
+  value.CopyInto(yearText, 0, 4);
+  return atoi(yearText.String());
+}
+
+static bool
+YearMatches(uint32 year, const BString &exact, const BString &from,
+            const BString &to)
+{
+  if (year == 0)
+    return true;
+
+  int32 exactYear = YearFromDateString(exact);
+  if (exactYear > 0)
+    return year == (uint32)exactYear;
+
+  int32 fromYear = YearFromDateString(from);
+  int32 toYear = YearFromDateString(to);
+  if (fromYear > 0 && year < (uint32)fromYear)
+    return false;
+  if (toYear > 0 && year > (uint32)toYear)
+    return false;
+  return true;
+}
+
+static bool
+CountryMatches(const BString &country, const BString &filter)
+{
+  if (filter.IsEmpty() || country.IsEmpty())
+    return true;
+
+  return country.ICompare(filter.String()) == 0;
+}
+
+static void
+AppendDateClause(BString &query, const char *field, const BString &exact,
+                 const BString &from, const BString &to)
+{
+  if (!field)
+    return;
+
+  if (!from.IsEmpty() || !to.IsEmpty()) {
+    bool fromOk = IsDateValueSafe(from);
+    bool toOk = IsDateValueSafe(to);
+    if (!fromOk && !toOk)
+      return;
+
+    AppendAnd(query);
+    query << field << ":[";
+    query << (fromOk ? from.String() : "*");
+    query << " TO ";
+    query << (toOk ? to.String() : "*");
+    query << "]";
+    return;
+  }
+
+  if (IsDateValueSafe(exact)) {
+    AppendAnd(query);
+    query << field << ":" << exact;
+  }
+}
+
+static BString
+BuildRecordingSearchQuery(const MBRecordingSearchOptions &options)
+{
+  BString query;
+  AppendPhraseClause(query, "artist", options.artist);
+  AppendPhraseClause(query, "artistname", options.artistName);
+  AppendPhraseClause(query, "recording", options.recording);
+  AppendPhraseClause(query, "release", options.release);
+  AppendDateClause(query, "date", options.date, options.dateFrom,
+                   options.dateTo);
+  AppendDateClause(query, "firstreleasedate", options.firstReleaseDate,
+                   options.firstReleaseDateFrom, options.firstReleaseDateTo);
+  AppendPhraseClause(query, "tag", options.tag);
+  AppendPhraseClause(query, "country", options.country);
+  AppendPhraseClause(query, "format", options.format);
+  AppendNumberClause(query, "tracksrelease", options.tracksRelease);
+  AppendNumberClause(query, "tnum", options.trackNumber);
+  return query;
+}
+
+static BString
+BuildReleaseSearchQuery(const MBReleaseSearchOptions &options)
+{
+  BString query;
+  AppendPhraseClause(query, "artist", options.artist);
+  AppendPhraseClause(query, "artistname", options.artistName);
+  AppendPhraseClause(query, "release", options.release);
+  AppendDateClause(query, "date", options.date, options.dateFrom,
+                   options.dateTo);
+  AppendPhraseClause(query, "tag", options.tag);
+  AppendPhraseClause(query, "country", options.country);
+  AppendPhraseClause(query, "format", options.format);
+  AppendPhraseClause(query, "status", options.status);
+  AppendPhraseClause(query, "primarytype", options.primaryType);
+  AppendPhraseClause(query, "barcode", options.barcode);
+  AppendPhraseClause(query, "catno", options.catalogNumber);
+  AppendNumberClause(query, "tracks", options.tracks);
+  return query;
+}
+
+static std::vector<BString>
+BuildRecordingSearchQueries(const MBRecordingSearchOptions &options)
+{
+  std::vector<BString> queries;
+  BString query = BuildRecordingSearchQuery(options);
+  if (!query.IsEmpty())
+    queries.push_back(query);
+
+  if (!options.release.IsEmpty()) {
+    MBRecordingSearchOptions relaxed = options;
+    relaxed.release.Truncate(0);
+    query = BuildRecordingSearchQuery(relaxed);
+    if (!query.IsEmpty())
+      queries.push_back(query);
+  }
+
+  return queries;
+}
+
+static std::vector<BString>
+BuildReleaseSearchQueries(const MBReleaseSearchOptions &options)
+{
+  std::vector<BString> queries;
+  BString query = BuildReleaseSearchQuery(options);
+  if (!query.IsEmpty())
+    queries.push_back(query);
+
+  if (!options.artist.IsEmpty() && !options.release.IsEmpty()) {
+    MBReleaseSearchOptions relaxed = options;
+    relaxed.artist.Truncate(0);
+    relaxed.artistName.Truncate(0);
+    query = BuildReleaseSearchQuery(relaxed);
+    if (!query.IsEmpty())
+      queries.push_back(query);
+  }
+
+  return queries;
+}
+
 /**
  * @brief Runs a MusicBrainz query with a timeout in a separate thread.
  *
@@ -200,129 +444,139 @@ std::vector<MBHit>
 MusicBrainzApiClient::SearchRecording(const BString &artist, const BString &title,
                                    const BString &albumOpt,
                                    std::function<bool()> shouldCancel) {
+  MBRecordingSearchOptions options;
+  options.artist = artist;
+  options.recording = title;
+  options.release = albumOpt;
+  return SearchRecording(options, shouldCancel);
+}
+
+std::vector<MBHit>
+MusicBrainzApiClient::SearchRecording(const MBRecordingSearchOptions &options,
+                                   std::function<bool()> shouldCancel) {
   std::vector<MBHit> results;
   try {
     if (shouldCancel && shouldCancel())
       return results;
-    _RespectRateLimit();
-
     BString ua;
     ua.SetToFormat("BeTon/0.1 (%s)", fContact.String());
     DEBUG_PRINT("User-Agent: '%s'\n", ua.String());
 
-    fLastCall = system_time();
+    std::vector<BString> queries = BuildRecordingSearchQueries(options);
+    if (queries.empty())
+      return results;
 
-    BString query;
-
-    BString escArtist = artist;
-    escArtist.ReplaceAll("\"", "\\\"");
-    BString escTitle = title;
-    escTitle.ReplaceAll("\"", "\\\"");
-
-    query.SetToFormat("artist:\"%s\" AND recording:\"%s\"", escArtist.String(),
-                      escTitle.String());
-
-    if (!albumOpt.IsEmpty()) {
-      BString escAlbum = albumOpt;
-      escAlbum.ReplaceAll("\"", "\\\"");
-      query << " AND release:\"" << escAlbum << "\"";
-    }
-
-    DEBUG_PRINT("Search Query: '%s'\n", query.String());
-
-    int retries = 3;
     CMetadata meta;
-    while (retries > 0) {
-      if (shouldCancel && shouldCancel()) {
-        DEBUG_PRINT("Cancelled by user during retry loop.\n");
-        return results;
-      }
-      try {
+    for (const auto &query : queries) {
+      DEBUG_PRINT("Search Query: '%s'\n", query.String());
 
-        CQuery::tParamMap params;
-        params["query"] = query.String();
+      int retries = 3;
+      while (retries > 0) {
+        if (shouldCancel && shouldCancel()) {
+          DEBUG_PRINT("Cancelled by user during retry loop.\n");
+          return results;
+        }
+        try {
 
-        meta =
-            RunQueryWithTimeout(ua, "recording", "", "", params, shouldCancel);
-        break;
-      } catch (const std::exception &e) {
-        DEBUG_PRINT("Exception in Query: %s. Retries left: %d\n",
-                    e.what(), retries - 1);
-        retries--;
-        if (retries == 0)
+          CQuery::tParamMap params;
+          params["query"] = query.String();
+          BString limit;
+          limit.SetToFormat("%ld", (long)ClampSearchLimit(options.limit));
+          params["limit"] = limit.String();
+
+          _RespectRateLimit();
+          fLastCall = system_time();
+          meta =
+              RunQueryWithTimeout(ua, "recording", "", "", params, shouldCancel);
           break;
+        } catch (const std::exception &e) {
+          DEBUG_PRINT("Exception in Query: %s. Retries left: %d\n",
+                      e.what(), retries - 1);
+          retries--;
+          if (retries == 0)
+            break;
 
-        for (int i = 0; i < 10; i++) {
-          if (shouldCancel && shouldCancel())
-            return results;
-          snooze(100000);
+          for (int i = 0; i < 10; i++) {
+            if (shouldCancel && shouldCancel())
+              return results;
+            snooze(100000);
+          }
         }
       }
-    }
 
-    if (auto rl = meta.RecordingList()) {
-      for (int i = 0; i < rl->NumItems(); i++) {
-        if (auto rec = rl->Item(i)) {
-          MBHit hit;
-          hit.recordingId = rec->ID().c_str();
-          hit.title = rec->Title().c_str();
+      if (auto rl = meta.RecordingList()) {
+        for (int i = 0; i < rl->NumItems(); i++) {
+          if (auto rec = rl->Item(i)) {
+            MBHit hit;
+            hit.recordingId = rec->ID().c_str();
+            hit.title = rec->Title().c_str();
+            hit.genre = options.tag;
 
-          if (auto ac = rec->ArtistCredit()) {
-            if (auto ncl = ac->NameCreditList()) {
-              BString artStr;
-              for (int k = 0; k < ncl->NumItems(); k++) {
-                if (auto nc = ncl->Item(k)) {
-                  if (auto a = nc->Artist()) {
-                    if (k > 0)
-                      artStr << ", ";
-                    artStr << a->Name().c_str();
+            if (auto ac = rec->ArtistCredit()) {
+              if (auto ncl = ac->NameCreditList()) {
+                BString artStr;
+                for (int k = 0; k < ncl->NumItems(); k++) {
+                  if (auto nc = ncl->Item(k)) {
+                    if (auto a = nc->Artist()) {
+                      if (k > 0)
+                        artStr << ", ";
+                      artStr << a->Name().c_str();
+                    }
                   }
                 }
+                hit.artist = artStr;
               }
-              hit.artist = artStr;
             }
-          }
 
-          if (auto rlist = rec->ReleaseList()) {
-            if (rlist->NumItems() > 0) {
-              for (int j = 0; j < rlist->NumItems(); j++) {
-                if (auto rel = rlist->Item(j)) {
-                  MBHit specificHit = hit;
-                  specificHit.releaseId = rel->ID().c_str();
-                  specificHit.releaseTitle = rel->Title().c_str();
+            if (auto rlist = rec->ReleaseList()) {
+              if (rlist->NumItems() > 0) {
+                for (int j = 0; j < rlist->NumItems(); j++) {
+                  if (auto rel = rlist->Item(j)) {
+                    MBHit specificHit = hit;
+                    specificHit.releaseId = rel->ID().c_str();
+                    specificHit.releaseTitle = rel->Title().c_str();
 
-                  specificHit.country = rel->Country().c_str();
+                    specificHit.country = rel->Country().c_str();
 
-                  std::string d = rel->Date().c_str();
-                  if (!d.empty()) {
-                    specificHit.year = atoi(d.c_str());
-                  }
+                    std::string d = rel->Date().c_str();
+                    if (!d.empty()) {
+                      specificHit.year = atoi(d.c_str());
+                    }
+                    if (!YearMatches(specificHit.year, options.date,
+                                     options.dateFrom, options.dateTo) ||
+                        !CountryMatches(specificHit.country,
+                                        options.country)) {
+                      continue;
+                    }
 
-                  int totalTracks = 0;
-                  if (auto ml = rel->MediumList()) {
-                    for (int m = 0; m < ml->NumItems(); m++) {
-                      if (auto med = ml->Item(m)) {
-                        if (auto tl = med->TrackList()) {
+                    int totalTracks = 0;
+                    if (auto ml = rel->MediumList()) {
+                      for (int m = 0; m < ml->NumItems(); m++) {
+                        if (auto med = ml->Item(m)) {
+                          if (auto tl = med->TrackList()) {
 
-                          totalTracks += tl->Count();
+                            totalTracks += tl->Count();
+                          }
                         }
                       }
                     }
-                  }
-                  specificHit.trackCount = totalTracks;
+                    specificHit.trackCount = totalTracks;
 
-                  results.push_back(specificHit);
+                    results.push_back(specificHit);
+                  }
                 }
+              } else {
+
+                results.push_back(hit);
               }
             } else {
-
               results.push_back(hit);
             }
-          } else {
-            results.push_back(hit);
           }
         }
       }
+      if (!results.empty())
+        break;
     }
 
   } catch (const std::bad_alloc &) {
@@ -339,107 +593,115 @@ MusicBrainzApiClient::SearchRecording(const BString &artist, const BString &titl
 std::vector<MBHit>
 MusicBrainzApiClient::SearchRelease(const BString &artist, const BString &album,
                                  std::function<bool()> shouldCancel) {
+  MBReleaseSearchOptions options;
+  options.artist = artist;
+  options.release = album;
+  return SearchRelease(options, shouldCancel);
+}
+
+std::vector<MBHit>
+MusicBrainzApiClient::SearchRelease(const MBReleaseSearchOptions &options,
+                                 std::function<bool()> shouldCancel) {
   std::vector<MBHit> results;
   try {
     if (shouldCancel && shouldCancel())
       return results;
-    _RespectRateLimit();
-
     BString ua;
     ua.SetToFormat("BeTon/0.1 (%s)", fContact.String());
-    fLastCall = system_time();
 
-    BString escArtist = artist;
-    escArtist.ReplaceAll("\"", "\\\"");
-    BString escAlbum = album;
-    escAlbum.ReplaceAll("\"", "\\\"");
-
-    BString query;
-    if (!escArtist.IsEmpty() && !escAlbum.IsEmpty()) {
-      query.SetToFormat("artist:\"%s\" AND release:\"%s\"",
-                        escArtist.String(), escAlbum.String());
-    } else if (!escAlbum.IsEmpty()) {
-      query.SetToFormat("release:\"%s\"", escAlbum.String());
-    } else if (!escArtist.IsEmpty()) {
-      query.SetToFormat("artist:\"%s\"", escArtist.String());
-    } else {
+    std::vector<BString> queries = BuildReleaseSearchQueries(options);
+    if (queries.empty())
       return results;
-    }
-
-    DEBUG_PRINT("Release Search Query: '%s'\n", query.String());
 
     CMetadata meta;
-    int retries = 3;
-    while (retries > 0) {
+    for (const auto &query : queries) {
+      DEBUG_PRINT("Release Search Query: '%s'\n", query.String());
+
+      int retries = 3;
+      while (retries > 0) {
+        if (shouldCancel && shouldCancel())
+          return results;
+        try {
+          CQuery::tParamMap params;
+          params["query"] = query.String();
+          params["inc"] = "media artist-credits";
+          BString limit;
+          limit.SetToFormat("%ld", (long)ClampSearchLimit(options.limit));
+          params["limit"] = limit.String();
+          _RespectRateLimit();
+          fLastCall = system_time();
+          meta = RunQueryWithTimeout(ua, "release", "", "", params,
+                                     shouldCancel);
+          break;
+        } catch (const std::exception &e) {
+          DEBUG_PRINT("Exception in Release Query: %s. Retries left: %d\n",
+                      e.what(), retries - 1);
+          retries--;
+          if (retries == 0)
+            break;
+          for (int i = 0; i < 10; i++) {
+            if (shouldCancel && shouldCancel())
+              return results;
+            snooze(100000);
+          }
+        }
+      }
+
       if (shouldCancel && shouldCancel())
         return results;
-      try {
-        CQuery::tParamMap params;
-        params["query"] = query.String();
-        params["inc"] = "media artist-credits";
-        meta = RunQueryWithTimeout(ua, "release", "", "", params,
-                                   shouldCancel);
-        break;
-      } catch (const std::exception &e) {
-        DEBUG_PRINT("Exception in Release Query: %s. Retries left: %d\n",
-                    e.what(), retries - 1);
-        retries--;
-        if (retries == 0)
-          break;
-        for (int i = 0; i < 10; i++) {
-          if (shouldCancel && shouldCancel())
-            return results;
-          snooze(100000);
-        }
-      }
-    }
 
-    if (shouldCancel && shouldCancel())
-      return results;
+      if (auto rlist = meta.ReleaseList()) {
+        for (int i = 0; i < rlist->NumItems(); i++) {
+          if (auto rel = rlist->Item(i)) {
+            MBHit hit;
+            hit.releaseId = rel->ID().c_str();
+            hit.releaseTitle = rel->Title().c_str();
+            hit.title = hit.releaseTitle;
+            hit.country = rel->Country().c_str();
+            hit.genre = options.tag;
 
-    if (auto rlist = meta.ReleaseList()) {
-      for (int i = 0; i < rlist->NumItems(); i++) {
-        if (auto rel = rlist->Item(i)) {
-          MBHit hit;
-          hit.releaseId = rel->ID().c_str();
-          hit.releaseTitle = rel->Title().c_str();
-          hit.title = hit.releaseTitle;
-          hit.country = rel->Country().c_str();
+            std::string d = rel->Date().c_str();
+            if (!d.empty())
+              hit.year = atoi(d.c_str());
+            if (!YearMatches(hit.year, options.date, options.dateFrom,
+                             options.dateTo) ||
+                !CountryMatches(hit.country, options.country)) {
+              continue;
+            }
 
-          std::string d = rel->Date().c_str();
-          if (!d.empty())
-            hit.year = atoi(d.c_str());
-
-          if (auto ac = rel->ArtistCredit()) {
-            if (auto ncl = ac->NameCreditList()) {
-              BString artStr;
-              for (int k = 0; k < ncl->NumItems(); k++) {
-                if (auto nc = ncl->Item(k)) {
-                  if (auto a = nc->Artist()) {
-                    if (k > 0)
-                      artStr << ", ";
-                    artStr << a->Name().c_str();
+            if (auto ac = rel->ArtistCredit()) {
+              if (auto ncl = ac->NameCreditList()) {
+                BString artStr;
+                for (int k = 0; k < ncl->NumItems(); k++) {
+                  if (auto nc = ncl->Item(k)) {
+                    if (auto a = nc->Artist()) {
+                      if (k > 0)
+                        artStr << ", ";
+                      artStr << a->Name().c_str();
+                    }
                   }
                 }
-              }
-              hit.artist = artStr;
-            }
-          }
-
-          int totalTracks = 0;
-          if (auto ml = rel->MediumList()) {
-            for (int m = 0; m < ml->NumItems(); m++) {
-              if (auto med = ml->Item(m)) {
-                if (auto tl = med->TrackList())
-                  totalTracks += tl->Count();
+                hit.artist = artStr;
               }
             }
-          }
-          hit.trackCount = totalTracks;
 
-          results.push_back(hit);
+            int totalTracks = 0;
+            if (auto ml = rel->MediumList()) {
+              for (int m = 0; m < ml->NumItems(); m++) {
+                if (auto med = ml->Item(m)) {
+                  if (auto tl = med->TrackList())
+                    totalTracks += tl->Count();
+                }
+              }
+            }
+            hit.trackCount = totalTracks;
+
+            results.push_back(hit);
+          }
         }
       }
+      if (!results.empty())
+        break;
     }
   } catch (const std::bad_alloc &) {
     throw;

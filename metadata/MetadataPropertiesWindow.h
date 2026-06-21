@@ -17,7 +17,7 @@
 
 class BButton;
 class BFilePanel;
-class BListView;
+class BColumnListView;
 class BStringView;
 class BTabView;
 class BTextControl;
@@ -176,10 +176,13 @@ private:
   BTextControl *fMbSearchArtist = nullptr;
   BTextControl *fMbSearchAlbum = nullptr;
   BTextControl *fMbSearchTitle = nullptr;
+  BTextControl *fMbSearchTag = nullptr;
+  BTextControl *fMbSearchYear = nullptr;
+  BTextControl *fMbSearchCountry = nullptr;
   BButton *fMbSearch = nullptr;
   BButton *fMbCancel = nullptr;
   BStringView *fMbStatusView = nullptr;
-  BListView *fMbResults = nullptr;
+  BColumnListView *fMbResults = nullptr;
   BButton *fMbApplyTrack = nullptr;
   BButton *fMbApplyAlbum = nullptr;
   ///@}

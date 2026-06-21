@@ -148,6 +148,91 @@ void MusicBrainzLookupController::StartSearch(BMessage *msg) {
   bool albumSearch = false;
   msg->FindBool("album_search", &albumSearch);
 
+  auto findString = [msg](const char *name) {
+    BString value;
+    msg->FindString(name, &value);
+    return value;
+  };
+  auto findInt = [msg](const char *name) {
+    int32 value = -1;
+    if (msg->FindInt32(name, &value) == B_OK)
+      return value;
+
+    BString text;
+    if (msg->FindString(name, &text) == B_OK && !text.IsEmpty())
+      value = atoi(text.String());
+    return value;
+  };
+  auto findPositiveInt = [&findInt](const char *name) {
+    int32 value = findInt(name);
+    return value > 0 ? value : -1;
+  };
+
+  BString tag = findString("tag");
+  if (tag.IsEmpty())
+    tag = findString("genre");
+  BString recording = findString("recording");
+  if (recording.IsEmpty())
+    recording = title;
+  BString release = findString("release");
+  if (release.IsEmpty())
+    release = album;
+  BString artistName = findString("artistname");
+  if (artistName.IsEmpty())
+    artistName = findString("artist_name");
+  BString firstReleaseDate = findString("firstreleasedate");
+  if (firstReleaseDate.IsEmpty())
+    firstReleaseDate = findString("first_release_date");
+  BString firstReleaseDateFrom = findString("firstreleasedate_from");
+  if (firstReleaseDateFrom.IsEmpty())
+    firstReleaseDateFrom = findString("first_release_date_from");
+  BString firstReleaseDateTo = findString("firstreleasedate_to");
+  if (firstReleaseDateTo.IsEmpty())
+    firstReleaseDateTo = findString("first_release_date_to");
+
+  MBRecordingSearchOptions recordingOptions;
+  recordingOptions.artist = artist;
+  recordingOptions.artistName = artistName;
+  recordingOptions.recording = recording;
+  recordingOptions.release = release;
+  recordingOptions.date = findString("date");
+  recordingOptions.dateFrom = findString("date_from");
+  recordingOptions.dateTo = findString("date_to");
+  recordingOptions.firstReleaseDate = firstReleaseDate;
+  recordingOptions.firstReleaseDateFrom = firstReleaseDateFrom;
+  recordingOptions.firstReleaseDateTo = firstReleaseDateTo;
+  recordingOptions.tag = tag;
+  recordingOptions.country = findString("country");
+  recordingOptions.format = findString("format");
+  recordingOptions.tracksRelease = findPositiveInt("tracks_release");
+  if (recordingOptions.tracksRelease < 0)
+    recordingOptions.tracksRelease = findPositiveInt("tracksrelease");
+  recordingOptions.trackNumber = findPositiveInt("track_number");
+  if (recordingOptions.trackNumber < 0)
+    recordingOptions.trackNumber = findPositiveInt("tnum");
+  recordingOptions.limit = findInt("limit");
+
+  MBReleaseSearchOptions releaseOptions;
+  releaseOptions.artist = artist;
+  releaseOptions.artistName = artistName;
+  releaseOptions.release = release;
+  releaseOptions.date = findString("date");
+  releaseOptions.dateFrom = findString("date_from");
+  releaseOptions.dateTo = findString("date_to");
+  releaseOptions.tag = tag;
+  releaseOptions.country = findString("country");
+  releaseOptions.format = findString("format");
+  releaseOptions.status = findString("status");
+  releaseOptions.primaryType = findString("primary_type");
+  if (releaseOptions.primaryType.IsEmpty())
+    releaseOptions.primaryType = findString("primarytype");
+  releaseOptions.barcode = findString("barcode");
+  releaseOptions.catalogNumber = findString("catalog_number");
+  if (releaseOptions.catalogNumber.IsEmpty())
+    releaseOptions.catalogNumber = findString("catno");
+  releaseOptions.tracks = findPositiveInt("tracks");
+  releaseOptions.limit = findInt("limit");
+
   DEBUG_PRINT(
       "MSG_MB_SEARCH received: A='%s', T='%s', Alb='%s'\n",
       artist.String(), title.String(), album.String());
@@ -166,8 +251,8 @@ void MusicBrainzLookupController::StartSearch(BMessage *msg) {
   fWindow->UpdateStatus(B_TRANSLATE("Searching on MusicBrainz..."));
 
   MainWindow *window = fWindow;
-  window->LaunchThread("MBSearch", [window, artist, title, album, albumSearch,
-                                    replyTo, gen]() {
+  window->LaunchThread("MBSearch", [window, recordingOptions, releaseOptions,
+                                    albumSearch, replyTo, gen]() {
     if (!window->fMbClient) {
       DEBUG_PRINT("Search thread abort: fMbClient is null\n");
       return;
@@ -180,9 +265,8 @@ void MusicBrainzLookupController::StartSearch(BMessage *msg) {
     };
     std::vector<MBHit> hits =
         albumSearch
-            ? window->fMbClient->SearchRelease(artist, album, abortCheck)
-            : window->fMbClient->SearchRecording(artist, title, album,
-                                                 abortCheck);
+            ? window->fMbClient->SearchRelease(releaseOptions, abortCheck)
+            : window->fMbClient->SearchRecording(recordingOptions, abortCheck);
     DEBUG_PRINT("MusicBrainz search returned %zu hits\n",
                 hits.size());
 
@@ -299,6 +383,13 @@ void MusicBrainzLookupController::HandleSearchComplete(BMessage *msg) {
       resp.AddString("item", item);
       resp.AddString("id", h.recordingId);
       resp.AddString("releaseId", h.releaseId);
+      resp.AddString("artist", h.artist);
+      resp.AddString("title", albumSearch ? h.releaseTitle : h.title);
+      resp.AddString("release", h.releaseTitle);
+      resp.AddInt32("year", h.year);
+      resp.AddString("country", h.country);
+      resp.AddString("genre", h.genre);
+      resp.AddInt32("trackCount", h.trackCount);
     }
     status_t err = replyTo.SendMessage(&resp);
     DEBUG_PRINT(

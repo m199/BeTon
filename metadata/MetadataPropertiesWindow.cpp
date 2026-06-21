@@ -7,6 +7,8 @@
 #include <Bitmap.h>
 #include <Button.h>
 #include <Catalog.h>
+#include <ColumnListView.h>
+#include <ColumnTypes.h>
 #include <ControlLook.h>
 #include <DataIO.h>
 #include <Directory.h>
@@ -20,9 +22,7 @@
 #include <Message.h>
 #include <MenuItem.h>
 #include <PopUpMenu.h>
-#include <ScrollView.h>
 #include <SpaceLayoutItem.h>
-#include <StringItem.h>
 #include <StringView.h>
 #include <TabView.h>
 #include <TextControl.h>
@@ -32,6 +32,7 @@
 #include <Window.h>
 #include <algorithm>
 #include <cinttypes>
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <memory>
@@ -126,6 +127,95 @@ IsMultipleFilesPlaceholder(const char *text)
   return text != nullptr && strcmp(text, MultipleFilesPlaceholder()) == 0;
 }
 
+static void
+ClearColumnRows(BColumnListView *view)
+{
+  if (!view)
+    return;
+
+  while (view->CountRows() > 0) {
+    BRow *row = view->RowAt(0);
+    if (!row)
+      break;
+    view->RemoveRow(row);
+    delete row;
+  }
+}
+
+static BString
+TrimmedString(const char *text)
+{
+  BString value(text ? text : "");
+  value.Trim();
+  return value;
+}
+
+static bool
+IsYearText(const BString &value)
+{
+  if (value.Length() != 4)
+    return false;
+
+  const char *text = value.String();
+  for (int32 i = 0; i < value.Length(); ++i) {
+    if (!std::isdigit((unsigned char)text[i]))
+      return false;
+  }
+  return true;
+}
+
+static BString
+YearRangeStart(const BString &year)
+{
+  return year;
+}
+
+static BString
+YearRangeEnd(const BString &year)
+{
+  BString value;
+  value << year << "-12-31";
+  return value;
+}
+
+static void
+AddYearSearchToMessage(BMessage *message, const char *text)
+{
+  if (!message)
+    return;
+
+  BString value = TrimmedString(text);
+  if (value.IsEmpty())
+    return;
+
+  int32 sep = value.FindFirst("..");
+  int32 sepLen = 2;
+  if (sep < 0) {
+    sep = value.FindFirst('-');
+    sepLen = 1;
+  }
+
+  if (sep >= 0) {
+    BString from;
+    value.CopyInto(from, 0, sep);
+    from.Trim();
+    BString to;
+    value.CopyInto(to, sep + sepLen, value.Length() - sep - sepLen);
+    to.Trim();
+
+    if (IsYearText(from))
+      message->AddString("date_from", YearRangeStart(from));
+    if (IsYearText(to))
+      message->AddString("date_to", YearRangeEnd(to));
+    return;
+  }
+
+  if (IsYearText(value)) {
+    message->AddString("date_from", YearRangeStart(value));
+    message->AddString("date_to", YearRangeEnd(value));
+  }
+}
+
 } // namespace
 
 class RatingStringView final : public BStringView {
@@ -197,6 +287,17 @@ public:
 
 private:
   MetadataPropertiesWindow *fOwner;
+};
+
+class MusicBrainzResultRow final : public BRow {
+public:
+  explicit MusicBrainzResultRow(int32 cacheIndex)
+      : BRow(), fCacheIndex(cacheIndex) {}
+
+  int32 CacheIndex() const { return fCacheIndex; }
+
+private:
+  int32 fCacheIndex;
 };
 
 /**
@@ -670,6 +771,12 @@ void MetadataPropertiesWindow::_BuildTab_MB(BView *parent) {
                                     nullptr);
   fMbSearchTitle = new BTextControl("Titel:", B_TRANSLATE("Title:"), "",
                                     nullptr);
+  fMbSearchTag = new BTextControl("Tag:", B_TRANSLATE("Genre:"), "",
+                                  nullptr);
+  fMbSearchYear = new BTextControl("Year:", B_TRANSLATE("Year:"), "",
+                                   nullptr);
+  fMbSearchCountry = new BTextControl("Country:", B_TRANSLATE("Country:"), "",
+                                      nullptr);
 
   fMbSearch =
       new BButton("Suchen", B_TRANSLATE("Search"), new BMessage(MSG_MB_SEARCH));
@@ -679,16 +786,46 @@ void MetadataPropertiesWindow::_BuildTab_MB(BView *parent) {
 
   fMbStatusView = new BStringView("mbStatus", B_TRANSLATE("Ready."));
 
-  fMbResults = new BListView("mbResults");
+  fMbResults = new BColumnListView("mbResults",
+                                   B_WILL_DRAW | B_FRAME_EVENTS | B_NAVIGABLE);
+  fMbResults->SetSelectionMode(B_SINGLE_SELECTION_LIST);
+  fMbResults->SetColor(B_COLOR_BACKGROUND, ui_color(B_LIST_BACKGROUND_COLOR));
+  fMbResults->SetColor(B_COLOR_TEXT, ui_color(B_LIST_ITEM_TEXT_COLOR));
+  fMbResults->SetColor(B_COLOR_SELECTION,
+                       ui_color(B_LIST_SELECTED_BACKGROUND_COLOR));
+  fMbResults->SetColor(B_COLOR_SELECTION_TEXT,
+                       ui_color(B_LIST_SELECTED_ITEM_TEXT_COLOR));
+  fMbResults->SetColor(B_COLOR_ROW_DIVIDER, B_TRANSPARENT_COLOR);
+  fMbResults->SetColor(B_COLOR_HEADER_BACKGROUND,
+                       ui_color(B_PANEL_BACKGROUND_COLOR));
+  fMbResults->SetColor(B_COLOR_HEADER_TEXT, ui_color(B_PANEL_TEXT_COLOR));
+  fMbResults->AddColumn(new BStringColumn(B_TRANSLATE("Artist"), 150, 60, 320,
+                                          B_TRUNCATE_END),
+                        0);
+  fMbResults->AddColumn(new BStringColumn(B_TRANSLATE("Title"), 190, 70, 420,
+                                          B_TRUNCATE_END),
+                        1);
+  fMbResults->AddColumn(new BStringColumn(B_TRANSLATE("Album"), 190, 70, 420,
+                                          B_TRUNCATE_END),
+                        2);
+  fMbResults->AddColumn(new BStringColumn(B_TRANSLATE("Genre"), 100, 50, 180,
+                                          B_TRUNCATE_END),
+                        3);
+  fMbResults->AddColumn(new BStringColumn(B_TRANSLATE("Year"), 60, 40, 90,
+                                          B_TRUNCATE_END, B_ALIGN_RIGHT),
+                        4);
+  fMbResults->AddColumn(new BStringColumn(B_TRANSLATE("Country"), 70, 45, 100,
+                                          B_TRUNCATE_END),
+                        5);
+  fMbResults->AddColumn(new BStringColumn(B_TRANSLATE("Tracks"), 70, 45, 100,
+                                          B_TRUNCATE_END, B_ALIGN_RIGHT),
+                        6);
   fMbApplyTrack =
       new BButton("ApplyTrack", B_TRANSLATE("Apply Selection (Track)"),
                   new BMessage(MSG_MB_APPLY));
   fMbApplyAlbum =
       new BButton("ApplyAlbum", B_TRANSLATE("Apply Selection (Album)"),
                   new BMessage(MSG_MB_APPLY_ALBUM));
-
-  auto *resultsScroll =
-      new BScrollView("mbResultsScroll", fMbResults, 0, true, true);
 
   gl->SetInsets(B_USE_WINDOW_INSETS);
 
@@ -697,19 +834,26 @@ void MetadataPropertiesWindow::_BuildTab_MB(BView *parent) {
   grid->SetSpacing(5.0f, 5.0f);
   grid->SetColumnWeight(0, 0.0f);
   grid->SetColumnWeight(1, 1.0f);
+  grid->SetColumnWeight(2, 0.0f);
+  grid->SetColumnWeight(3, 0.45f);
   form->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
 
   int32 r = 0;
-  auto mkRow = [&](BTextControl *tc) {
-    grid->AddItem(tc->CreateLabelLayoutItem(), 0, r);
-    BLayoutItem *textItem = tc->CreateTextViewLayoutItem();
-    textItem->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
-    grid->AddItem(textItem, 1, r);
+  auto mkRow = [&](BTextControl *left, BTextControl *right) {
+    grid->AddItem(left->CreateLabelLayoutItem(), 0, r);
+    BLayoutItem *leftText = left->CreateTextViewLayoutItem();
+    leftText->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+    grid->AddItem(leftText, 1, r);
+
+    grid->AddItem(right->CreateLabelLayoutItem(), 2, r);
+    BLayoutItem *rightText = right->CreateTextViewLayoutItem();
+    rightText->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+    grid->AddItem(rightText, 3, r);
     r++;
   };
-  mkRow(fMbSearchArtist);
-  mkRow(fMbSearchAlbum);
-  mkRow(fMbSearchTitle);
+  mkRow(fMbSearchArtist, fMbSearchTag);
+  mkRow(fMbSearchAlbum, fMbSearchYear);
+  mkRow(fMbSearchTitle, fMbSearchCountry);
 
   {
     auto *container = new BView("mbButtons", B_WILL_DRAW);
@@ -722,11 +866,11 @@ void MetadataPropertiesWindow::_BuildTab_MB(BView *parent) {
     sub->AddView(fMbStatusView);
     sub->AddItem(BSpaceLayoutItem::CreateGlue());
 
-    grid->AddView(container, 0, r++, 2, 1);
+    grid->AddView(container, 0, r++, 4, 1);
   }
   gl->AddView(form);
 
-  gl->AddView(resultsScroll, 1.0f);
+  gl->AddView(fMbResults, 1.0f);
 
   auto *brow = new BView(nullptr, B_WILL_DRAW);
   brow->SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
@@ -915,7 +1059,7 @@ void MetadataPropertiesWindow::MessageReceived(BMessage *msg) {
     if (fMbStatusView)
       fMbStatusView->SetText(B_TRANSLATE("Searching..."));
     if (fMbResults)
-      fMbResults->MakeEmpty();
+      ClearColumnRows(fMbResults);
     fMbCache.clear();
     fMbAlbumResults = false;
     if (fMbApplyTrack)
@@ -928,6 +1072,12 @@ void MetadataPropertiesWindow::MessageReceived(BMessage *msg) {
     q->AddString("title",
                  (!fIsMulti && fMbSearchTitle) ? fMbSearchTitle->Text() : "");
     q->AddString("album", fMbSearchAlbum ? fMbSearchAlbum->Text() : "");
+    if (fMbSearchTag && fMbSearchTag->Text() && *fMbSearchTag->Text())
+      q->AddString("tag", TrimmedString(fMbSearchTag->Text()));
+    AddYearSearchToMessage(q, fMbSearchYear ? fMbSearchYear->Text() : "");
+    if (fMbSearchCountry && fMbSearchCountry->Text() &&
+        *fMbSearchCountry->Text())
+      q->AddString("country", TrimmedString(fMbSearchCountry->Text()));
     q->AddBool("album_search", fIsMulti);
 
     if (!fIsMulti)
@@ -945,20 +1095,52 @@ void MetadataPropertiesWindow::MessageReceived(BMessage *msg) {
       fMbCancel->SetEnabled(false);
 
     if (fMbResults) {
-      fMbResults->MakeEmpty();
+      ClearColumnRows(fMbResults);
       fMbCache.clear();
       fMbAlbumResults = false;
       msg->FindBool("album_results", &fMbAlbumResults);
 
-      BString item, recId, relId;
+      BString item, recId, relId, artist, title, release, genre, country;
       int32 i = 0;
       while (msg->FindString("item", i, &item) == B_OK) {
         DEBUG_PRINT("Adding item: %s\n", item.String());
-        fMbResults->AddItem(new BStringItem(item.String()));
 
+        recId.Truncate(0);
+        relId.Truncate(0);
+        artist.Truncate(0);
+        title.Truncate(0);
+        release.Truncate(0);
+        genre.Truncate(0);
+        country.Truncate(0);
         msg->FindString("id", i, &recId);
         msg->FindString("releaseId", i, &relId);
+        msg->FindString("artist", i, &artist);
+        msg->FindString("title", i, &title);
+        msg->FindString("release", i, &release);
+        msg->FindString("genre", i, &genre);
+        msg->FindString("country", i, &country);
+        int32 year = 0;
+        int32 trackCount = 0;
+        msg->FindInt32("year", i, &year);
+        msg->FindInt32("trackCount", i, &trackCount);
+
         fMbCache.push_back({recId, relId});
+
+        auto *row = new MusicBrainzResultRow((int32)fMbCache.size() - 1);
+        row->SetField(new BStringField(artist.String()), 0);
+        row->SetField(new BStringField(title.String()), 1);
+        row->SetField(new BStringField(release.String()), 2);
+        row->SetField(new BStringField(genre.String()), 3);
+        BString yearText;
+        if (year > 0)
+          yearText.SetToFormat("%ld", (long)year);
+        row->SetField(new BStringField(yearText.String()), 4);
+        row->SetField(new BStringField(country.String()), 5);
+        BString tracksText;
+        if (trackCount > 0)
+          tracksText.SetToFormat("%ld", (long)trackCount);
+        row->SetField(new BStringField(tracksText.String()), 6);
+        fMbResults->AddRow(row);
 
         i++;
       }
@@ -989,7 +1171,11 @@ void MetadataPropertiesWindow::MessageReceived(BMessage *msg) {
   }
 
   case MSG_MB_APPLY: {
-    int32 sel = fMbResults ? fMbResults->CurrentSelection() : -1;
+    auto *row = fMbResults
+                    ? dynamic_cast<MusicBrainzResultRow *>(
+                          fMbResults->CurrentSelection())
+                    : nullptr;
+    int32 sel = row ? row->CacheIndex() : -1;
     if (sel >= 0 && sel < (int32)fMbCache.size()) {
       if (fMbCancel)
         fMbCancel->SetEnabled(true);
@@ -1012,7 +1198,11 @@ void MetadataPropertiesWindow::MessageReceived(BMessage *msg) {
   }
 
   case MSG_MB_APPLY_ALBUM: {
-    int32 sel = fMbResults ? fMbResults->CurrentSelection() : -1;
+    auto *row = fMbResults
+                    ? dynamic_cast<MusicBrainzResultRow *>(
+                          fMbResults->CurrentSelection())
+                    : nullptr;
+    int32 sel = row ? row->CacheIndex() : -1;
     if (sel >= 0 && sel < (int32)fMbCache.size()) {
       if (fMbCancel)
         fMbCancel->SetEnabled(true);
@@ -1192,7 +1382,7 @@ void MetadataPropertiesWindow::_ClearMusicBrainzResults(bool cancelPendingSearch
   if (fMbStatusView)
     fMbStatusView->SetText(B_TRANSLATE("Ready."));
   if (fMbResults)
-    fMbResults->MakeEmpty();
+    ClearColumnRows(fMbResults);
 
   fMbCache.clear();
   fMbAlbumResults = false;
@@ -1571,6 +1761,9 @@ void MetadataPropertiesWindow::_LoadInitialData() {
   clearText(fMbSearchArtist);
   clearText(fMbSearchAlbum);
   clearText(fMbSearchTitle);
+  clearText(fMbSearchTag);
+  clearText(fMbSearchYear);
+  clearText(fMbSearchCountry);
 
   TagData td;
   if (MetadataTagIO::ReadTags(fFilePath, td)) {
@@ -1619,6 +1812,11 @@ void MetadataPropertiesWindow::_LoadInitialData() {
       fMbSearchAlbum->SetText(td.album.String());
     if (fMbSearchTitle)
       fMbSearchTitle->SetText(td.title.String());
+    if (fMbSearchTag)
+      fMbSearchTag->SetText(td.genre.String());
+    if (fMbSearchYear)
+      fMbSearchYear->SetText(
+          td.year ? BString().SetToFormat("%lu", (unsigned long)td.year) : "");
   }
 
   CoverBlob cover;
@@ -1885,6 +2083,25 @@ void MetadataPropertiesWindow::_LoadInitialDataMulti() {
     else
       fMbSearchTitle->SetText("");
   }
+  if (fMbSearchTag) {
+    BString common;
+    if (_StateForStrings(genres, common) == FieldState::AllSame)
+      fMbSearchTag->SetText(common.String());
+    else
+      fMbSearchTag->SetText("");
+  }
+  if (fMbSearchYear) {
+    uint32 common = 0;
+    if (_StateForInts(years, common) == FieldState::AllSame && common > 0) {
+      BString year;
+      year.SetToFormat("%lu", (unsigned long)common);
+      fMbSearchYear->SetText(year.String());
+    } else {
+      fMbSearchYear->SetText("");
+    }
+  }
+  if (fMbSearchCountry)
+    fMbSearchCountry->SetText("");
 
   if (fArtworkView) {
     if (anyCover && firstCoverBlob.data() && firstCoverBlob.size() > 0) {
@@ -1950,7 +2167,9 @@ void MetadataPropertiesWindow::_UpdateHeaderFromFields() {
     BString countText;
     countText.SetToFormat(B_TRANSLATE("%ld files"), (long)fFiles.size());
     sub2 << countText;
-  }
-  if (fHdrSub2)
+ }
+  if (fHdrSub2) {
     fHdrSub2->SetText(sub2.String());
+  }
 }
+

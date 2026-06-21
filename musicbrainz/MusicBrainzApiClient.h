@@ -52,9 +52,55 @@ struct MBHit {
   BString releaseTitle; ///< Title of that release.
   uint32 year = 0;      ///< Year of that release.
   BString country;      ///< Country code (e.g., "US", "DE").
+  BString genre;        ///< Genre/tag used for the search, if any.
   int score = 0;        ///< Search relevance score (0-100).
   int trackCount = 0;   ///< Track count of the release (context).
   ///@}
+};
+
+/**
+ * @struct MBRecordingSearchOptions
+ * @brief Fielded MusicBrainz recording search criteria.
+ */
+struct MBRecordingSearchOptions {
+  BString artist;               ///< Combined credited artist field.
+  BString artistName;           ///< Any recording artist name.
+  BString recording;            ///< Recording or linked track title.
+  BString release;              ///< Any containing release title.
+  BString date;                 ///< Exact release date/year.
+  BString dateFrom;             ///< Inclusive release date lower bound.
+  BString dateTo;               ///< Inclusive release date upper bound.
+  BString firstReleaseDate;     ///< Exact earliest release date/year.
+  BString firstReleaseDateFrom; ///< Inclusive earliest date lower bound.
+  BString firstReleaseDateTo;   ///< Inclusive earliest date upper bound.
+  BString tag;                  ///< MusicBrainz tag, usable as genre hint.
+  BString country;              ///< ISO 3166-1 alpha-2 release country.
+  BString format;               ///< Medium format.
+  int32 tracksRelease = -1;     ///< Total tracks on a containing release.
+  int32 trackNumber = -1;       ///< Track position on any medium.
+  int32 limit = 50;             ///< Result limit, clamped to 1..100.
+};
+
+/**
+ * @struct MBReleaseSearchOptions
+ * @brief Fielded MusicBrainz release search criteria.
+ */
+struct MBReleaseSearchOptions {
+  BString artist;        ///< Combined credited artist field.
+  BString artistName;    ///< Any release artist name.
+  BString release;       ///< Release title.
+  BString date;          ///< Exact release date/year.
+  BString dateFrom;      ///< Inclusive release date lower bound.
+  BString dateTo;        ///< Inclusive release date upper bound.
+  BString tag;           ///< MusicBrainz tag, usable as genre hint.
+  BString country;       ///< ISO 3166-1 alpha-2 release country.
+  BString format;        ///< Medium format.
+  BString status;        ///< Release status.
+  BString primaryType;   ///< Release group primary type.
+  BString barcode;       ///< Release barcode.
+  BString catalogNumber; ///< Label catalog number.
+  int32 tracks = -1;     ///< Total release track count.
+  int32 limit = 50;      ///< Result limit, clamped to 1..100.
 };
 
 /**
@@ -89,6 +135,13 @@ public:
                   std::function<bool()> shouldCancel = nullptr);
 
   /**
+   * @brief Searches for recordings using fielded MusicBrainz criteria.
+   */
+  std::vector<MBHit>
+  SearchRecording(const MBRecordingSearchOptions &options,
+                  std::function<bool()> shouldCancel = nullptr);
+
+  /**
    * @brief Searches for album releases.
    * @param artist Artist or album artist name.
    * @param album Album/release title.
@@ -97,6 +150,13 @@ public:
    */
   std::vector<MBHit>
   SearchRelease(const BString &artist, const BString &album,
+                std::function<bool()> shouldCancel = nullptr);
+
+  /**
+   * @brief Searches for album releases using fielded MusicBrainz criteria.
+   */
+  std::vector<MBHit>
+  SearchRelease(const MBReleaseSearchOptions &options,
                 std::function<bool()> shouldCancel = nullptr);
 
   /**
