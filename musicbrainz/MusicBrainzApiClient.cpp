@@ -208,6 +208,17 @@ CountryMatches(const BString &country, const BString &filter)
   return country.ICompare(filter.String()) == 0;
 }
 
+static BString
+ExpandDateBound(const BString &val, const char *yearSuffix)
+{
+  if (val.Length() == 4) {
+    BString expanded = val;
+    expanded << yearSuffix;
+    return expanded;
+  }
+  return val;
+}
+
 static void
 AppendDateClause(BString &query, const char *field, const BString &exact,
                  const BString &from, const BString &to)
@@ -223,16 +234,20 @@ AppendDateClause(BString &query, const char *field, const BString &exact,
 
     AppendAnd(query);
     query << field << ":[";
-    query << (fromOk ? from.String() : "*");
+    query << (fromOk ? ExpandDateBound(from, "").String() : "*");
     query << " TO ";
-    query << (toOk ? to.String() : "*");
+    query << (toOk ? ExpandDateBound(to, "-12-31").String() : "*");
     query << "]";
     return;
   }
 
   if (IsDateValueSafe(exact)) {
     AppendAnd(query);
-    query << field << ":" << exact;
+    if (exact.Length() == 4) {
+      query << field << ":[" << exact << " TO " << exact << "-12-31]";
+    } else {
+      query << field << ":" << exact;
+    }
   }
 }
 

@@ -174,7 +174,7 @@ static BString
 YearRangeEnd(const BString &year)
 {
   BString value;
-  value << year << "-12-31";
+  value << year << "-9999";
   return value;
 }
 
