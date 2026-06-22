@@ -466,7 +466,20 @@ public:
       parent->SetFont(&boldFont);
     }
 
-    if (isGray) {
+    bool isEditable = fOwner && fOwner->FastEditEnabled() && (fOwner->FieldNameForColumn(LogicalFieldNum()) != nullptr);
+    if (isEditable) {
+      rgb_color bg = fOwner->Color(B_COLOR_BACKGROUND);
+      if (bg.red == 0 && bg.green == 0 && bg.blue == 0 && bg.alpha == 0) {
+        parent->SetHighColor(255, 0, 0, 255);
+      } else {
+        float brightness = (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f);
+        if (brightness < 128.0f) {
+          parent->SetHighColor(255, 182, 193, 255);
+        } else {
+          parent->SetHighColor(139, 0, 0, 255);
+        }
+      }
+    } else if (isGray) {
       parent->SetHighColor(tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
                                       B_DISABLED_LABEL_TINT));
     }
@@ -495,10 +508,12 @@ class StatusIntegerColumn : public BIntegerColumn {
 public:
   StatusIntegerColumn(const char *title, float width, float minWidth,
                       float maxWidth, const char *attrName = nullptr,
-                      alignment align = B_ALIGN_LEFT)
+                      alignment align = B_ALIGN_LEFT,
+                      MediaTableView *owner = nullptr)
       : BIntegerColumn(title, width, minWidth, maxWidth, align),
-        fAttrName(attrName), fTitle(title) {}
+        fAttrName(attrName), fOwner(owner), fTitle(title) {}
 
+  void SetOwner(MediaTableView *owner) { fOwner = owner; }
   const char *Title() const { return fTitle.String(); }
 
   int CompareFields(BField *field1, BField *field2) override {
@@ -527,7 +542,20 @@ public:
      * External changes will be detected via Node Monitoring (TODO).
      */
 
-    if (isGray) {
+    bool isEditable = fOwner && fOwner->FastEditEnabled() && (fOwner->FieldNameForColumn(LogicalFieldNum()) != nullptr);
+    if (isEditable) {
+      rgb_color bg = fOwner->Color(B_COLOR_BACKGROUND);
+      if (bg.red == 0 && bg.green == 0 && bg.blue == 0 && bg.alpha == 0) {
+        parent->SetHighColor(255, 0, 0, 255);
+      } else {
+        float brightness = (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f);
+        if (brightness < 128.0f) {
+          parent->SetHighColor(255, 182, 193, 255);
+        } else {
+          parent->SetHighColor(139, 0, 0, 255);
+        }
+      }
+    } else if (isGray) {
       parent->SetHighColor(tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
                                       B_DISABLED_LABEL_TINT));
     }
@@ -544,6 +572,7 @@ private:
   }
 
   BString fAttrName;
+  MediaTableView *fOwner = nullptr;
   BString fTitle;
 };
 
@@ -553,11 +582,13 @@ private:
  */
 class RatingColumn : public BStringColumn {
 public:
-  RatingColumn(const char *title, float width, float minWidth, float maxWidth)
+  RatingColumn(const char *title, float width, float minWidth, float maxWidth,
+               MediaTableView *owner = nullptr)
       : BStringColumn(title, width, minWidth, maxWidth, B_TRUNCATE_END,
                       B_ALIGN_LEFT),
-        fTitle(title) {}
+        fOwner(owner), fTitle(title) {}
 
+  void SetOwner(MediaTableView *owner) { fOwner = owner; }
   const char *Title() const { return fTitle.String(); }
 
   /**
@@ -603,12 +634,31 @@ public:
     BFont oldFont;
     parent->GetFont(&oldFont);
 
+    rgb_color oldColor = parent->HighColor();
+
+    bool isEditable = fOwner && fOwner->FastEditEnabled() && (fOwner->FieldNameForColumn(LogicalFieldNum()) != nullptr);
+    if (isEditable) {
+      rgb_color bg = fOwner->Color(B_COLOR_BACKGROUND);
+      if (bg.red == 0 && bg.green == 0 && bg.blue == 0 && bg.alpha == 0) {
+        parent->SetHighColor(255, 0, 0, 255);
+      } else {
+        float brightness = (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f);
+        if (brightness < 128.0f) {
+          parent->SetHighColor(255, 182, 193, 255);
+        } else {
+          parent->SetHighColor(139, 0, 0, 255);
+        }
+      }
+    }
+
     BStringColumn::DrawField(field, rect, parent);
 
+    parent->SetHighColor(oldColor);
     parent->SetFont(&oldFont);
   }
 
 private:
+  MediaTableView *fOwner = nullptr;
   BString fTitle;
 };
 
@@ -701,6 +751,10 @@ MediaTableView::MediaTableView(const char *name)
 
   for (int32 i = 0; i < CountColumns(); ++i) {
     if (auto *col = dynamic_cast<StatusStringColumn *>(ColumnAt(i))) {
+      col->SetOwner(this);
+    } else if (auto *col = dynamic_cast<StatusIntegerColumn *>(ColumnAt(i))) {
+      col->SetOwner(this);
+    } else if (auto *col = dynamic_cast<RatingColumn *>(ColumnAt(i))) {
       col->SetOwner(this);
     }
     if (auto *col = ColumnAt(i)) {
@@ -1251,6 +1305,14 @@ void MediaTableView::KeyDown(const char *bytes, int32 numBytes) {
     return;
   }
 
+  if (numBytes == 1 && bytes[0] == B_SPACE) {
+    BMessage msg(MSG_PLAYPAUSE);
+    if (Window()) {
+      Window()->PostMessage(&msg);
+    }
+    return;
+  }
+
   if (numBytes == 1) {
     uint32 modifiers = 0;
     BMessage *currentMsg = Window() ? Window()->CurrentMessage() : nullptr;
@@ -1279,6 +1341,68 @@ void MediaTableView::KeyDown(const char *bytes, int32 numBytes) {
         if (row) {
           msg.AddInt32("index", IndexOf(row));
           Looper()->PostMessage(&msg);
+        }
+        return;
+      }
+    } else {
+      if (bytes[0] == B_UP_ARROW) {
+        BRow *row = CurrentSelection();
+        int32 index = row ? IndexOf(row) : -1;
+        int32 targetIndex = -1;
+        if (index > 0) {
+          targetIndex = index - 1;
+        } else if (index == -1 && CountRows() > 0) {
+          targetIndex = CountRows() - 1;
+        }
+        if (targetIndex != -1) {
+          BRow *targetRow = RowAt(targetIndex);
+          DeselectAll();
+          AddToSelection(targetRow);
+          ScrollTo(targetRow);
+        }
+        return;
+      } else if (bytes[0] == B_DOWN_ARROW) {
+        BRow *row = CurrentSelection();
+        int32 index = row ? IndexOf(row) : -1;
+        int32 targetIndex = -1;
+        if (index < CountRows() - 1) {
+          targetIndex = index >= 0 ? index + 1 : 0;
+        } else if (index == -1 && CountRows() > 0) {
+          targetIndex = 0;
+        }
+        if (targetIndex != -1) {
+          BRow *targetRow = RowAt(targetIndex);
+          DeselectAll();
+          AddToSelection(targetRow);
+          ScrollTo(targetRow);
+        }
+        return;
+      } else if (bytes[0] == B_LEFT_ARROW || bytes[0] == B_RIGHT_ARROW) {
+        BRow *selRow = CurrentSelection();
+        if (selRow) {
+          MediaRow *mr = dynamic_cast<MediaRow *>(selRow);
+          if (mr) {
+            int32 currentRating = mr->Item().rating;
+            int32 newRating = currentRating;
+            if (bytes[0] == B_LEFT_ARROW) {
+              newRating = std::max((int32)0, currentRating - 1);
+            } else {
+              newRating = std::min((int32)10, currentRating + 1);
+            }
+            if (newRating != currentRating) {
+              BMessage setRatingMsg(MSG_SET_RATING);
+              setRatingMsg.AddInt32("rating", newRating);
+
+              BMessage filesMsg;
+              BuildFilesMessage(this, filesMsg);
+              if (filesMsg.HasRef("refs")) {
+                setRatingMsg.AddMessage("files", &filesMsg);
+                if (Window()) {
+                  Window()->PostMessage(&setRatingMsg);
+                }
+              }
+            }
+          }
         }
         return;
       }
@@ -1315,6 +1439,7 @@ void MediaTableView::AttachedToWindow() {
     outline->SetViewColor(B_TRANSPARENT_COLOR);
   }
   Window()->AddShortcut('a', B_COMMAND_KEY, new BMessage(kMsgSelectAll), this);
+  Window()->AddShortcut('l', B_COMMAND_KEY, new BMessage(kMsgLocatePlaying), this);
 }
 
 /**
@@ -1322,6 +1447,7 @@ void MediaTableView::AttachedToWindow() {
  */
 void MediaTableView::DetachedFromWindow() {
   Window()->RemoveShortcut('a', B_COMMAND_KEY);
+  Window()->RemoveShortcut('l', B_COMMAND_KEY);
   BColumnListView::DetachedFromWindow();
 }
 
@@ -1517,14 +1643,11 @@ void MediaTableView::MessageReceived(BMessage *msg) {
                                    new BMessage(MSG_DELETE_ITEM)));
       }
 
-      if (inPlaylist || inFolder) {
-        if (!inPlaylist)
-          menu.AddSeparatorItem();
-        menu.AddItem(new BMenuItem(B_TRANSLATE("Move To..."),
-                                   new BMessage(MSG_MOVE_TO)));
-        menu.AddItem(new BMenuItem(B_TRANSLATE("Move to Trash"),
-                                   new BMessage(MSG_MOVE_TO_TRASH)));
-      }
+      menu.AddSeparatorItem();
+      menu.AddItem(new BMenuItem(B_TRANSLATE("Move File To..."),
+                                 new BMessage(MSG_MOVE_TO)));
+      menu.AddItem(new BMenuItem(B_TRANSLATE("Move File To Trash"),
+                                 new BMessage(MSG_MOVE_TO_TRASH)));
 
       menu.AddSeparatorItem();
       menu.AddItem(new BMenuItem(B_TRANSLATE("Properties..."),
@@ -1607,6 +1730,11 @@ void MediaTableView::MessageReceived(BMessage *msg) {
     for (int32 i = 0; i < CountRows(); ++i)
       if (BRow *row = RowAt(i))
         AddToSelection(row);
+    break;
+  }
+
+  case kMsgLocatePlaying: {
+    LocatePlayingTrack();
     break;
   }
 
@@ -2079,8 +2207,24 @@ void MediaTableView::StartCellEdit(BRow *row, BColumn *column, int32 colIdx, flo
   }
 
   editor->MakeFocus(true);
-  if (editor->TextView())
+  if (editor->TextView()) {
     editor->TextView()->SelectAll();
+    if (fFastEditEnabled) {
+      rgb_color textColor;
+      rgb_color bg = Color(B_COLOR_BACKGROUND);
+      if (bg.red == 0 && bg.green == 0 && bg.blue == 0 && bg.alpha == 0) {
+        textColor = (rgb_color){255, 0, 0, 255};
+      } else {
+        float brightness = (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f);
+        if (brightness < 128.0f) {
+          textColor = (rgb_color){255, 182, 193, 255};
+        } else {
+          textColor = (rgb_color){139, 0, 0, 255};
+        }
+      }
+      editor->TextView()->SetFontAndColor(be_plain_font, B_FONT_ALL, &textColor);
+    }
+  }
 
   if (BView *outline = ScrollView())
     outline->ScrollTo(scrollPos);
@@ -2204,4 +2348,19 @@ const char *MediaTableView::FieldNameForColumn(int32 colIdx) const {
 
 BView* MediaTableView::ActiveEditor() const {
   return fActiveEditor;
+}
+
+void MediaTableView::LocatePlayingTrack() {
+  if (fNowPlayingPath.IsEmpty())
+    return;
+
+  for (int32 i = 0; i < CountRows(); ++i) {
+    MediaRow *mr = dynamic_cast<MediaRow *>(RowAt(i));
+    if (mr && mr->Item().path == fNowPlayingPath) {
+      DeselectAll();
+      AddToSelection(mr);
+      ScrollTo(mr);
+      break;
+    }
+  }
 }

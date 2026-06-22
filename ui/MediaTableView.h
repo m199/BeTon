@@ -92,16 +92,26 @@ public:
   static constexpr uint32 MSG_COMMIT_EDIT = 'cmed';
   static constexpr uint32 MSG_CANCEL_EDIT = 'cned';
   static constexpr uint32 kMsgSelectAll   = 'sall';
+  static constexpr uint32 kMsgLocatePlaying = 'locp';
 
   bool HasActiveEditor() const { return fActiveEditor != nullptr; }
   BView* ActiveEditor() const;
+  void LocatePlayingTrack();
 
   /**
    * @brief Enables or disables inline cell editing ("Fast Edit").
    * When disabled, clicking a selected row neither opens the cell
    * editor nor registers rating-star clicks.
    */
-  void SetFastEditEnabled(bool enabled) { fFastEditEnabled = enabled; }
+  void SetFastEditEnabled(bool enabled) {
+    if (fFastEditEnabled != enabled) {
+      fFastEditEnabled = enabled;
+      if (BView *outline = ScrollView())
+        outline->Invalidate();
+      else
+        Invalidate();
+    }
+  }
   bool FastEditEnabled() const { return fFastEditEnabled; }
 
   void SaveState(BMessage *msg);

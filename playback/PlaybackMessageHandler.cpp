@@ -40,6 +40,7 @@ bool PlaybackMessageHandler::HandleMessage(BMessage *msg) {
       fWindow->fPlaybackQueueManager->PlayNext();
     return true;
 
+  case MSG_PREV_SONG:
   case MSG_PREV_BTN:
     if (fWindow->fPlaybackQueueManager)
       fWindow->fPlaybackQueueManager->PlayPrevious();
