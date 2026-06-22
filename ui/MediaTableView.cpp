@@ -1617,10 +1617,8 @@ void MediaTableView::MessageReceived(BMessage *msg) {
       }
 
       bool inPlaylist = false;
-      bool inFolder = false;
       if (auto *mw = dynamic_cast<MainWindow *>(Window())) {
         inPlaylist = mw->IsPlaylistSelected();
-        inFolder = mw->IsFolderMode();
       }
 
       if (inPlaylist) {
