@@ -198,25 +198,31 @@ static uint8_t _ratingToByte(uint32 rating) {
  * @brief Maps a byte rating (0-255) to internal rating (0-10).
  */
 static uint32 _byteToRating(uint8_t val) {
+  // Thresholds are the midpoints between the byte values produced by
+  // _ratingToByte (1, 64, 96, 128, 160, 196, 208, 224, 240, 255), so this
+  // function is a proper inverse: a rating written by _ratingToByte reads
+  // back unchanged. Earlier the thresholds sat *on* the written byte values
+  // with a strict '<' test, which pushed every rating 2-9 up one half-star
+  // on each read/rescan round-trip.
   if (val == 0)
     return 0;
-  if (val < 8)
+  if (val < 32) // midpoint(1, 64)
     return 1;
-  if (val < 64)
+  if (val < 80) // midpoint(64, 96)
     return 2;
-  if (val < 96)
+  if (val < 112) // midpoint(96, 128)
     return 3;
-  if (val < 128)
+  if (val < 144) // midpoint(128, 160)
     return 4;
-  if (val < 160)
+  if (val < 178) // midpoint(160, 196)
     return 5;
-  if (val < 196)
+  if (val < 202) // midpoint(196, 208)
     return 6;
-  if (val < 208)
+  if (val < 216) // midpoint(208, 224)
     return 7;
-  if (val < 224)
+  if (val < 232) // midpoint(224, 240)
     return 8;
-  if (val < 240)
+  if (val < 247) // midpoint(240, 255)
     return 9;
   return 10;
 }
