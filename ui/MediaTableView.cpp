@@ -2339,6 +2339,7 @@ const char *MediaTableView::FieldNameForColumn(int32 colIdx) const {
     case 7: return "track";
     case 8: return "disc";
     case 10: return "path";
+    case 11: return "rating";
     default: return nullptr;
   }
 }
