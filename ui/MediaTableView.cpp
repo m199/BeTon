@@ -835,6 +835,17 @@ public:
       _SendCommitMessage(0, true);
   }
 
+  void Draw(BRect updateRect) override {
+    BTextView::Draw(updateRect);
+    PushState();
+    SetHighColor(ui_color(B_KEYBOARD_NAVIGATION_COLOR));
+    SetPenSize(1.0f);
+    BRect b = Bounds();
+    b.InsetBy(0.5f, 0.5f);
+    StrokeRect(b);
+    PopState();
+  }
+
   void FrameResized(float width, float height) override {
     BTextView::FrameResized(width, height);
     _UpdateTextRect();
@@ -2521,6 +2532,11 @@ void MediaTableView::StartCellEdit(BRow *row, BColumn *column, int32 colIdx, flo
 
   if (BView *outline = ScrollView())
     outline->ScrollTo(scrollPos);
+
+  if (fEditingRow) {
+    InvalidateRow(fEditingRow);
+    Invalidate();
+  }
 }
 
 void MediaTableView::CommitCellEdit(bool restoreFocus) {
