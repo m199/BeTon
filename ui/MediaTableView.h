@@ -150,9 +150,11 @@ private:
   class RightClickFilter;
   class DropFilter;
   class EditorKeyFilter;
+  class RatingKeyFilter;
   RightClickFilter *fRCFilter = nullptr;
   DropFilter *fDropFilter = nullptr;
   EditorKeyFilter *fEditorKeyFilter = nullptr;
+  RatingKeyFilter *fRatingKeyFilter = nullptr;
   ///@}
 
   void ShowContextMenu(BPoint screenWhere);

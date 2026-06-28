@@ -393,6 +393,103 @@ private:
 };
 
 /**
+ * @class RatingKeyFilter
+ * @brief Window-level filter that intercepts Left/Right arrow keys for rating adjustment.
+ *
+ * BOutlineView consumes Left/Right key events before BColumnListView::KeyDown
+ * is reached, so the rating-adjustment logic in MediaTableView::KeyDown is never
+ * called. This filter intercepts those keys at the window level and posts the
+ * rating change directly, bypassing the inner view's handling.
+ */
+class MediaTableView::RatingKeyFilter : public BMessageFilter {
+public:
+  explicit RatingKeyFilter(MediaTableView *owner)
+      : BMessageFilter(B_ANY_DELIVERY, B_ANY_SOURCE, B_KEY_DOWN),
+        fOwner(owner) {}
+
+  filter_result Filter(BMessage *msg, BHandler **target) override {
+    if (!fOwner || !msg || msg->what != B_KEY_DOWN)
+      return B_DISPATCH_MESSAGE;
+
+    if (fOwner->HasActiveEditor())
+      return B_DISPATCH_MESSAGE;
+
+    BWindow *window = fOwner->Window();
+    if (!window)
+      return B_DISPATCH_MESSAGE;
+
+    BView *focused = window->CurrentFocus();
+    if (!focused || !_IsChildOf(focused, fOwner))
+      return B_DISPATCH_MESSAGE;
+
+    const char *bytes = nullptr;
+    ssize_t numBytes = 0;
+    if (msg->FindData("bytes", B_STRING_TYPE, (const void **)&bytes, &numBytes) != B_OK || numBytes < 1)
+      return B_DISPATCH_MESSAGE;
+
+    if (bytes[0] != B_LEFT_ARROW && bytes[0] != B_RIGHT_ARROW)
+      return B_DISPATCH_MESSAGE;
+
+    int32 modifiers = 0;
+    msg->FindInt32("modifiers", &modifiers);
+    if (modifiers & (B_OPTION_KEY | B_COMMAND_KEY | B_CONTROL_KEY))
+      return B_DISPATCH_MESSAGE;
+
+    BRow *selRow = fOwner->CurrentSelection();
+    if (!selRow)
+      return B_DISPATCH_MESSAGE;
+
+    MediaRow *mr = dynamic_cast<MediaRow *>(selRow);
+    if (!mr)
+      return B_DISPATCH_MESSAGE;
+
+    int32 currentRating = mr->Item().rating;
+    int32 newRating = currentRating;
+    if (bytes[0] == B_LEFT_ARROW)
+      newRating = std::max((int32)0, currentRating - 1);
+    else
+      newRating = std::min((int32)10, currentRating + 1);
+
+    if (newRating == currentRating)
+      return B_SKIP_MESSAGE;
+
+    BMessage filesMsg;
+    for (BRow *r = fOwner->CurrentSelection(); r; r = fOwner->CurrentSelection(r)) {
+      auto *row = dynamic_cast<MediaRow *>(r);
+      if (!row)
+        continue;
+      // Immediately update cached rating and visual display so key-repeat
+      // events read the updated value instead of the stale cached one.
+      MediaItem updated = row->Item();
+      updated.rating = newRating;
+      fOwner->UpdateItem(updated);
+      entry_ref ref;
+      if (get_ref_for_path(updated.path.String(), &ref) == B_OK)
+        filesMsg.AddRef("refs", &ref);
+    }
+    if (filesMsg.HasRef("refs")) {
+      BMessage setRatingMsg(MSG_SET_RATING);
+      setRatingMsg.AddInt32("rating", newRating);
+      setRatingMsg.AddMessage("files", &filesMsg);
+      window->PostMessage(&setRatingMsg);
+    }
+
+    return B_SKIP_MESSAGE;
+  }
+
+private:
+  static bool _IsChildOf(BView *child, BView *parent) {
+    for (BView *v = child; v; v = v->Parent()) {
+      if (v == parent)
+        return true;
+    }
+    return false;
+  }
+
+  MediaTableView *fOwner;
+};
+
+/**
  * @brief Appends indices of all selected rows to a message.
  * @param view The content view to query selections from.
  * @param into The message to append "index" fields to.
@@ -1501,32 +1598,8 @@ void MediaTableView::KeyDown(const char *bytes, int32 numBytes) {
         }
         return;
       } else if (bytes[0] == B_LEFT_ARROW || bytes[0] == B_RIGHT_ARROW) {
-        BRow *selRow = CurrentSelection();
-        if (selRow) {
-          MediaRow *mr = dynamic_cast<MediaRow *>(selRow);
-          if (mr) {
-            int32 currentRating = mr->Item().rating;
-            int32 newRating = currentRating;
-            if (bytes[0] == B_LEFT_ARROW) {
-              newRating = std::max((int32)0, currentRating - 1);
-            } else {
-              newRating = std::min((int32)10, currentRating + 1);
-            }
-            if (newRating != currentRating) {
-              BMessage setRatingMsg(MSG_SET_RATING);
-              setRatingMsg.AddInt32("rating", newRating);
-
-              BMessage filesMsg;
-              BuildFilesMessage(this, filesMsg);
-              if (filesMsg.HasRef("refs")) {
-                setRatingMsg.AddMessage("files", &filesMsg);
-                if (Window()) {
-                  Window()->PostMessage(&setRatingMsg);
-                }
-              }
-            }
-          }
-        }
+        // Rating adjustment via arrow keys is handled by RatingKeyFilter
+        // at the window common-filter level before BOutlineView consumes them.
         return;
       }
     }
@@ -1561,6 +1634,8 @@ void MediaTableView::AttachedToWindow() {
     outline->AddFilter(new DropFilter(this));
     outline->SetViewColor(B_TRANSPARENT_COLOR);
   }
+  fRatingKeyFilter = new RatingKeyFilter(this);
+  Window()->AddCommonFilter(fRatingKeyFilter);
   Window()->AddShortcut('a', B_COMMAND_KEY, new BMessage(kMsgSelectAll), this);
   Window()->AddShortcut('l', B_COMMAND_KEY, new BMessage(kMsgLocatePlaying), this);
 }
@@ -1570,6 +1645,11 @@ void MediaTableView::AttachedToWindow() {
  */
 void MediaTableView::DetachedFromWindow() {
   RemoveEditorKeyFilter();
+  if (fRatingKeyFilter) {
+    Window()->RemoveCommonFilter(fRatingKeyFilter);
+    delete fRatingKeyFilter;
+    fRatingKeyFilter = nullptr;
+  }
   Window()->RemoveShortcut('a', B_COMMAND_KEY);
   Window()->RemoveShortcut('l', B_COMMAND_KEY);
   BColumnListView::DetachedFromWindow();
