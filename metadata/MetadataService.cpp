@@ -100,6 +100,13 @@ void MetadataService::SaveTags(const BMessage *msg) {
     BPath path(file.String());
     MetadataWriteTargets targets = MetadataTagIO::WriteTargetsForPath(file);
 
+    bool forceTags = false;
+    msg->FindBool("force_tags", &forceTags);
+    if (forceTags) {
+      targets.tags = true;
+      targets.bfs = MetadataTagIO::IsBeFsVolume(path);
+    }
+
     TagData td;
     if (!targets.tags && targets.bfs)
       MetadataTagIO::ReadBfsAttributes(path, td);
@@ -187,6 +194,8 @@ void MetadataService::SaveTags(const BMessage *msg) {
       update.AddInt32("duration", td.lengthSec);
       update.AddInt32("bitrate", td.bitrate);
 
+      update.AddString("albumArtist", td.albumArtist);
+      update.AddString("composer", td.composer);
       update.AddString("mbAlbumID", td.mbAlbumID);
       update.AddString("mbArtistID", td.mbArtistID);
       update.AddString("mbTrackID", td.mbTrackID);

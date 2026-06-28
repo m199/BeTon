@@ -62,6 +62,7 @@
 #include <StatusBar.h>
 #include <StringView.h>
 #include <TextControl.h>
+#include <TextView.h>
 #include <View.h>
 #include <algorithm>
 #include <random>
@@ -201,7 +202,9 @@ bool MainWindow::_HandleAppCommandMessage(BMessage *msg) {
         fLibraryManager ? fLibraryManager->ContentView() : nullptr;
     if (cv && cv->HasActiveEditor()) {
       // Let the inline text editor handle its own typing undo.
-      if (auto *tc = dynamic_cast<BTextControl *>(cv->ActiveEditor()))
+      if (auto *tv = dynamic_cast<BTextView *>(cv->ActiveEditor()))
+        PostMessage(B_UNDO, tv);
+      else if (auto *tc = dynamic_cast<BTextControl *>(cv->ActiveEditor()))
         PostMessage(B_UNDO, tc->TextView());
       break;
     }
@@ -331,13 +334,16 @@ public:
         if (view->HasActiveEditor()) {
           BView *v = dynamic_cast<BView *>(*target);
           bool clickOnEditor = false;
+          bool clickInTable = false;
           for (BView *p = v; p; p = p->Parent()) {
             if (p == view->ActiveEditor()) {
               clickOnEditor = true;
               break;
             }
+            if (p == view)
+              clickInTable = true;
           }
-          if (!clickOnEditor) {
+          if (!clickOnEditor && !clickInTable) {
             view->CommitCellEdit();
           }
         }

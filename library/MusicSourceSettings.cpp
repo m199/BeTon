@@ -105,12 +105,16 @@ MusicSourceSettings MusicSourceSettings::GetSourceForPath(const BString &filePat
   int32 bestLen = 0;
 
   for (const auto &src : sCache) {
-    if (filePath.StartsWith(src.path.String())) {
-      int32 len = src.path.Length();
-      if (len > bestLen) {
-        bestLen = len;
-        bestMatch = src;
-      }
+    if (src.path.IsEmpty())
+      continue;
+    int32 len = src.path.Length();
+    bool match = filePath.StartsWith(src.path.String()) &&
+                 (filePath.Length() == len ||
+                  filePath[len] == '/' ||
+                  src.path[len - 1] == '/');
+    if (match && len > bestLen) {
+      bestLen = len;
+      bestMatch = src;
     }
   }
 

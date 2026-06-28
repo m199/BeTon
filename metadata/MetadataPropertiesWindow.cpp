@@ -1242,10 +1242,43 @@ void MetadataPropertiesWindow::MessageReceived(BMessage *msg) {
       }
 
       if (needReload) {
-        if (fIsMulti)
+        if (fIsMulti) {
           _LoadInitialDataMulti();
-        else
-          _LoadInitialData();
+        } else {
+          auto setStr = [&](BTextControl *ctrl, const char *key) {
+            BString v;
+            if (ctrl && msg->FindString(key, &v) == B_OK)
+              ctrl->SetText(v.String());
+          };
+          auto setInt = [&](BTextControl *ctrl, const char *key) {
+            int32 v = 0;
+            if (ctrl && msg->FindInt32(key, &v) == B_OK)
+              ctrl->SetText(v > 0 ? BString().SetToFormat("%ld", (long)v) : "");
+          };
+          setStr(fEdTitle,       "title");
+          setStr(fEdArtist,      "artist");
+          setStr(fEdAlbum,       "album");
+          setStr(fEdAlbumArtist, "albumArtist");
+          setStr(fEdComposer,    "composer");
+          setStr(fEdGenre,       "genre");
+          setStr(fEdComment,     "comment");
+          setStr(fEdMBTrackID,   "mbTrackID");
+          setStr(fEdMBAlbumID,   "mbAlbumID");
+          setInt(fEdYear,        "year");
+          setInt(fEdTrack,       "track");
+          setInt(fEdTrackTotal,  "trackTotal");
+          setInt(fEdDisc,        "disc");
+          setInt(fEdDiscTotal,   "discTotal");
+          int32 rating = 0;
+          if (msg->FindInt32("rating", &rating) == B_OK)
+            _SetRating(rating, false);
+          if (fMbSearchArtist && fEdArtist)
+            fMbSearchArtist->SetText(fEdArtist->Text());
+          if (fMbSearchAlbum && fEdAlbum)
+            fMbSearchAlbum->SetText(fEdAlbum->Text());
+          if (fMbSearchTitle && fEdTitle)
+            fMbSearchTitle->SetText(fEdTitle->Text());
+        }
 
         if (fMbCancel)
           fMbCancel->SetEnabled(false);

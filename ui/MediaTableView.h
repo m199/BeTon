@@ -85,7 +85,7 @@ public:
   void UpdateItem(const MediaItem &mi, const BString *matchPath = nullptr);
 
   void StartCellEdit(BRow *row, BColumn *column, int32 colIdx, float colLeft, BView *targetView);
-  void CommitCellEdit();
+  void CommitCellEdit(bool restoreFocus = true);
   void CancelCellEdit();
   const char *FieldNameForColumn(int32 colIdx) const;
 
@@ -113,6 +113,8 @@ public:
     }
   }
   bool FastEditEnabled() const { return fFastEditEnabled; }
+
+  void SetFolderMode(bool folderMode) { fFolderMode = folderMode; }
 
   void SaveState(BMessage *msg);
   void LoadState(BMessage *msg);
@@ -147,11 +149,17 @@ private:
   ///@{
   class RightClickFilter;
   class DropFilter;
+  class EditorKeyFilter;
   RightClickFilter *fRCFilter = nullptr;
   DropFilter *fDropFilter = nullptr;
+  EditorKeyFilter *fEditorKeyFilter = nullptr;
   ///@}
 
   void ShowContextMenu(BPoint screenWhere);
+  bool StartAdjacentCellEdit(BRow *row, int32 colIdx, int32 direction,
+                             BView *targetView);
+  void InstallEditorKeyFilter();
+  void RemoveEditorKeyFilter();
   /**
    * @note fRowMap seemed unused in the .cpp, but keeping declaration if needed
    * later.
@@ -197,11 +205,10 @@ private:
   /** @name Cell Inline Editing */
   ///@{
   bool fFastEditEnabled{false};
+  bool fFolderMode{false};
   CellTextControl *fActiveEditor{nullptr};
   BRow *fEditingRow{nullptr};
-  BColumn *fEditingColumn{nullptr};
   int32 fEditingColIdx{-1};
-  BView *fEditingOutlineView{nullptr};
   BString fEditingPathPrefix; ///< Volume mount point hidden from the path editor
   ///@}
 };

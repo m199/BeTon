@@ -20,10 +20,10 @@
 #include <PopUpMenu.h>
 #include <View.h>
 #include <Window.h>
-#include <TextControl.h>
 #include <TextView.h>
 #include <algorithm>
 #include <cinttypes>
+#include <cstring>
 #include <memory>
 #include <set>
 #include <unistd.h>
@@ -330,6 +330,61 @@ public:
     }
 
     fOwner->fDragSourceIndex = -1;
+    return B_SKIP_MESSAGE;
+  }
+
+private:
+  MediaTableView *fOwner;
+};
+
+class MediaTableView::EditorKeyFilter : public BMessageFilter {
+public:
+  explicit EditorKeyFilter(MediaTableView *owner)
+      : BMessageFilter(B_ANY_DELIVERY, B_ANY_SOURCE, B_KEY_DOWN),
+        fOwner(owner) {}
+
+  filter_result Filter(BMessage *msg, BHandler **target) override {
+    if (!fOwner || !msg || msg->what != B_KEY_DOWN ||
+        !fOwner->HasActiveEditor()) {
+      return B_DISPATCH_MESSAGE;
+    }
+
+    char key = 0;
+    const char *bytes = nullptr;
+    if (msg->FindString("bytes", &bytes) == B_OK && bytes &&
+        strlen(bytes) == 1) {
+      key = bytes[0];
+    } else {
+      int8 byte = 0;
+      if (msg->FindInt8("byte", &byte) != B_OK)
+        return B_DISPATCH_MESSAGE;
+      key = (char)byte;
+    }
+
+    BMessage editMsg;
+    switch (key) {
+    case B_TAB: {
+      int32 modifiers = 0;
+      msg->FindInt32("modifiers", &modifiers);
+      editMsg.what = MediaTableView::MSG_COMMIT_EDIT;
+      editMsg.AddPointer("source", fOwner->ActiveEditor());
+      editMsg.AddInt32("move", (modifiers & B_SHIFT_KEY) ? -1 : 1);
+      break;
+    }
+    case B_ENTER:
+      editMsg.what = MediaTableView::MSG_COMMIT_EDIT;
+      editMsg.AddPointer("source", fOwner->ActiveEditor());
+      break;
+    case B_ESCAPE:
+      editMsg.what = MediaTableView::MSG_CANCEL_EDIT;
+      editMsg.AddPointer("source", fOwner->ActiveEditor());
+      break;
+    default:
+      return B_DISPATCH_MESSAGE;
+    }
+
+    if (fOwner->Looper())
+      fOwner->Looper()->PostMessage(&editMsg, fOwner);
     return B_SKIP_MESSAGE;
   }
 
@@ -662,33 +717,99 @@ private:
   BString fTitle;
 };
 
-class CellTextControl : public BTextControl {
+class CellTextControl : public BTextView {
 public:
-  CellTextControl(BRect frame, const char *name, const char *text, BMessage *message, BMessenger target)
-      : BTextControl(frame, name, nullptr, text, message), fTarget(target) {
-    SetFlags(Flags() | B_NAVIGABLE);
+  CellTextControl(BRect frame, const char *name, const char *text,
+                  MediaTableView *target)
+      : BTextView(frame, name, BRect(0, 0, frame.Width(), frame.Height()),
+                  B_FOLLOW_NONE, B_WILL_DRAW),
+        fTarget(target) {
+    SetFlags(Flags() & ~B_NAVIGABLE);
+    SetWordWrap(false);
+    MakeEditable(true);
+    MakeSelectable(true);
+    SetText(text);
+    _UpdateTextRect();
   }
 
   void MakeFocus(bool focused) override {
-    BTextControl::MakeFocus(focused);
-    if (!focused) {
-      BMessage msg(MediaTableView::MSG_COMMIT_EDIT);
-      msg.AddBool("focus_loss", true);
-      fTarget.SendMessage(&msg);
-    }
+    BTextView::MakeFocus(focused);
+    if (!focused && fTarget && fTarget->ActiveEditor() == this)
+      _SendCommitMessage(0, true);
   }
+
+  void FrameResized(float width, float height) override {
+    BTextView::FrameResized(width, height);
+    _UpdateTextRect();
+  }
+
+  void UpdateTextRect() { _UpdateTextRect(); }
 
   void KeyDown(const char *bytes, int32 numBytes) override {
     if (numBytes == 1 && bytes[0] == B_ESCAPE) {
       BMessage msg(MediaTableView::MSG_CANCEL_EDIT);
-      fTarget.SendMessage(&msg);
+      msg.AddPointer("source", this);
+      _PostMessage(&msg);
       return;
     }
-    BTextControl::KeyDown(bytes, numBytes);
+    if (numBytes == 1 && (bytes[0] == B_ENTER || bytes[0] == '\n')) {
+      _SendCommitMessage();
+      return;
+    }
+    if (numBytes == 1 && bytes[0] == B_TAB) {
+      int32 keyModifiers = modifiers();
+      if (BWindow *window = Window()) {
+        if (BMessage *current = window->CurrentMessage())
+          current->FindInt32("modifiers", &keyModifiers);
+      }
+      _SendCommitMessage((keyModifiers & B_SHIFT_KEY) ? -1 : 1);
+      return;
+    }
+    BTextView::KeyDown(bytes, numBytes);
+  }
+
+  void InsertText(const char *text, int32 length, int32 offset,
+                  const text_run_array *runs = nullptr) override {
+    if (length == 1 && text && text[0] == B_TAB) {
+      _SendCommitMessage((modifiers() & B_SHIFT_KEY) ? -1 : 1);
+      return;
+    }
+    BTextView::InsertText(text, length, offset, runs);
   }
 
 private:
-  BMessenger fTarget;
+  void _SendCommitMessage(int32 move = 0, bool focusLoss = false) {
+    BMessage msg(MediaTableView::MSG_COMMIT_EDIT);
+    msg.AddPointer("source", this);
+    if (move != 0)
+      msg.AddInt32("move", move);
+    if (focusLoss)
+      msg.AddBool("focus_loss", true);
+    _PostMessage(&msg);
+  }
+
+  void _PostMessage(BMessage *msg) {
+    if (fTarget && fTarget->Looper())
+      fTarget->Looper()->PostMessage(msg, fTarget);
+  }
+
+  void _UpdateTextRect() {
+    BRect rect(Bounds());
+    rect.InsetBy(2, 0);
+
+    font_height height;
+    GetFontHeight(&height);
+    float textHeight = ceilf(height.ascent + height.descent);
+    float top = floorf((Bounds().Height() + 1.0f - textHeight) / 2.0f);
+    if (top < 0.0f)
+      top = 0.0f;
+    rect.top = top;
+    rect.bottom = Bounds().bottom;
+
+    SetTextRect(rect);
+  }
+
+  MediaTableView *fTarget;
 };
 
 /**
@@ -1358,6 +1479,7 @@ void MediaTableView::KeyDown(const char *bytes, int32 numBytes) {
           BRow *targetRow = RowAt(targetIndex);
           DeselectAll();
           AddToSelection(targetRow);
+          SetFocusRow(targetRow, false);
           ScrollTo(targetRow);
         }
         return;
@@ -1374,6 +1496,7 @@ void MediaTableView::KeyDown(const char *bytes, int32 numBytes) {
           BRow *targetRow = RowAt(targetIndex);
           DeselectAll();
           AddToSelection(targetRow);
+          SetFocusRow(targetRow, false);
           ScrollTo(targetRow);
         }
         return;
@@ -1446,6 +1569,7 @@ void MediaTableView::AttachedToWindow() {
  * @brief Called when the view is detached from a window.
  */
 void MediaTableView::DetachedFromWindow() {
+  RemoveEditorKeyFilter();
   Window()->RemoveShortcut('a', B_COMMAND_KEY);
   Window()->RemoveShortcut('l', B_COMMAND_KEY);
   BColumnListView::DetachedFromWindow();
@@ -1715,11 +1839,32 @@ void MediaTableView::MessageReceived(BMessage *msg) {
   }
 
   case MSG_COMMIT_EDIT: {
-    CommitCellEdit();
+    void *source = nullptr;
+    if (msg->FindPointer("source", &source) == B_OK && source != fActiveEditor)
+      break;
+
+    int32 move = 0;
+    msg->FindInt32("move", &move);
+    bool focusLoss = false;
+    msg->FindBool("focus_loss", &focusLoss);
+    BRow *editRow = fEditingRow;
+    int32 editColIdx = fEditingColIdx;
+    BView *targetView = fActiveEditor ? fActiveEditor->Parent() : ScrollView();
+    bool moving = move != 0 && editRow;
+    CommitCellEdit(!moving && !focusLoss);
+    if (moving) {
+      if (!StartAdjacentCellEdit(editRow, editColIdx, move, targetView))
+        MakeFocus(true);
+      SetFocusRow(editRow, false);
+      InvalidateRow(editRow);
+      Invalidate();
+    }
     break;
   }
-
   case MSG_CANCEL_EDIT: {
+    void *source = nullptr;
+    if (msg->FindPointer("source", &source) == B_OK && source != fActiveEditor)
+      break;
     CancelCellEdit();
     break;
   }
@@ -2138,6 +2283,86 @@ void MediaTableView::_ApplyPendingSortRestore() {
   fPendingSortRestore.MakeEmpty();
 }
 
+void MediaTableView::InstallEditorKeyFilter() {
+  if (fEditorKeyFilter || !Window())
+    return;
+
+  fEditorKeyFilter = new EditorKeyFilter(this);
+  Window()->AddCommonFilter(fEditorKeyFilter);
+}
+
+void MediaTableView::RemoveEditorKeyFilter() {
+  if (!fEditorKeyFilter)
+    return;
+
+  if (Window())
+    Window()->RemoveCommonFilter(fEditorKeyFilter);
+  delete fEditorKeyFilter;
+  fEditorKeyFilter = nullptr;
+}
+
+bool MediaTableView::StartAdjacentCellEdit(BRow *row, int32 colIdx,
+                                           int32 direction,
+                                           BView *targetView) {
+  if (!row || direction == 0)
+    return false;
+
+  MediaRow *mr = dynamic_cast<MediaRow *>(row);
+  if (!mr)
+    return false;
+
+  BString path = mr->Item().path;
+  bool isRemote = path.StartsWith("http://") || path.StartsWith("https://") ||
+                  path.StartsWith("dlna://");
+  if (isRemote)
+    return false;
+
+  if (!targetView) {
+    targetView = ScrollView();
+    if (!targetView)
+      targetView = this;
+  }
+
+  struct EditableColumn {
+    BColumn *column;
+    int32 field;
+    float left;
+  };
+
+  std::vector<EditableColumn> editableColumns;
+  float colLeft = 16.0f;
+  for (int32 i = 0; i < CountColumns(); ++i) {
+    BColumn *column = ColumnAt(i);
+    if (!column || !column->IsVisible())
+      continue;
+
+    int32 field = column->LogicalFieldNum();
+    if (FieldNameForColumn(field) != nullptr)
+      editableColumns.push_back({column, field, colLeft});
+
+    colLeft += column->Width();
+  }
+
+  int32 current = -1;
+  for (int32 i = 0; i < (int32)editableColumns.size(); ++i) {
+    if (editableColumns[i].field == colIdx) {
+      current = i;
+      break;
+    }
+  }
+
+  if (current < 0)
+    return false;
+
+  int32 next = current + (direction > 0 ? 1 : -1);
+  if (next < 0 || next >= (int32)editableColumns.size())
+    return false;
+
+  StartCellEdit(row, editableColumns[next].column, editableColumns[next].field,
+                editableColumns[next].left, targetView);
+  return true;
+}
+
 void MediaTableView::StartCellEdit(BRow *row, BColumn *column, int32 colIdx, float colLeft, BView *targetView) {
   CommitCellEdit();
 
@@ -2184,19 +2409,21 @@ void MediaTableView::StartCellEdit(BRow *row, BColumn *column, int32 colIdx, flo
   }
 
   BRect editRect = cellRect;
-  editRect.InsetBy(1, 1);
+  editRect.left += 6.0f;
+  editRect.right -= 2.0f;
+  editRect.InsetBy(0, 1);
 
-  CellTextControl *editor = new CellTextControl(editRect, "cell_editor", initialText.String(),
-                                                new BMessage(MSG_COMMIT_EDIT), BMessenger(this));
-  editor->SetTarget(this);
+  CellTextControl *editor = new CellTextControl(
+      editRect, "cell_editor", initialText.String(), this);
+  editor->SetViewColor(ui_color(B_DOCUMENT_BACKGROUND_COLOR));
+  editor->SetLowColor(ui_color(B_DOCUMENT_BACKGROUND_COLOR));
+  editor->SetHighColor(ui_color(B_DOCUMENT_TEXT_COLOR));
 
   targetView->AddChild(editor);
-
   fActiveEditor = editor;
   fEditingRow = row;
-  fEditingColumn = column;
   fEditingColIdx = colIdx;
-  fEditingOutlineView = targetView;
+  InstallEditorKeyFilter();
 
   BPoint scrollPos(0, 0);
   if (BView *outline = ScrollView()) {
@@ -2205,35 +2432,26 @@ void MediaTableView::StartCellEdit(BRow *row, BColumn *column, int32 colIdx, flo
   }
 
   editor->MakeFocus(true);
-  if (editor->TextView()) {
-    editor->TextView()->SelectAll();
-    if (fFastEditEnabled) {
-      rgb_color textColor;
-      rgb_color bg = Color(B_COLOR_BACKGROUND);
-      if (bg.red == 0 && bg.green == 0 && bg.blue == 0 && bg.alpha == 0) {
-        textColor = (rgb_color){255, 0, 0, 255};
-      } else {
-        float brightness = (bg.red * 0.299f + bg.green * 0.587f + bg.blue * 0.114f);
-        if (brightness < 128.0f) {
-          textColor = (rgb_color){255, 182, 193, 255};
-        } else {
-          textColor = (rgb_color){139, 0, 0, 255};
-        }
-      }
-      editor->TextView()->SetFontAndColor(be_plain_font, B_FONT_ALL, &textColor);
-    }
+  editor->SelectAll();
+  if (fFastEditEnabled) {
+    rgb_color textColor = ui_color(B_DOCUMENT_TEXT_COLOR);
+    editor->SetFontAndColor(be_plain_font, B_FONT_ALL, &textColor);
+    editor->UpdateTextRect();
   }
 
   if (BView *outline = ScrollView())
     outline->ScrollTo(scrollPos);
 }
 
-void MediaTableView::CommitCellEdit() {
+void MediaTableView::CommitCellEdit(bool restoreFocus) {
   if (!fActiveEditor)
     return;
 
+  RemoveEditorKeyFilter();
+
   CellTextControl *editor = fActiveEditor;
   fActiveEditor = nullptr;
+  BView *editorParent = editor->Parent();
 
   BString newText = editor->Text();
 
@@ -2254,18 +2472,25 @@ void MediaTableView::CommitCellEdit() {
     scrollPos.y = outline->Bounds().top;
   }
 
-  if (editor->Parent())
-    editor->Parent()->RemoveChild(editor);
+  if (editorParent)
+    editorParent->RemoveChild(editor);
   delete editor;
+
+  if (fEditingRow) {
+    if (restoreFocus) {
+      MakeFocus(true);
+    }
+    InvalidateRow(fEditingRow);
+  }
+  if (editorParent)
+    editorParent->Invalidate();
+  Invalidate();
 
   if (BView *outline = ScrollView())
     outline->ScrollTo(scrollPos);
-
   if (newText == originalText) {
     fEditingRow = nullptr;
-    fEditingColumn = nullptr;
     fEditingColIdx = -1;
-    fEditingOutlineView = nullptr;
     fEditingPathPrefix = "";
     return;
   }
@@ -2295,6 +2520,8 @@ void MediaTableView::CommitCellEdit() {
           BMessage saveMsg(MSG_PROP_SAVE);
           saveMsg.AddString("file", path);
           saveMsg.AddString(fieldName, newText);
+          if (fFolderMode)
+            saveMsg.AddBool("force_tags", true);
           if (Window())
             Window()->PostMessage(&saveMsg);
         }
@@ -2303,9 +2530,7 @@ void MediaTableView::CommitCellEdit() {
   }
 
   fEditingRow = nullptr;
-  fEditingColumn = nullptr;
   fEditingColIdx = -1;
-  fEditingOutlineView = nullptr;
   fEditingPathPrefix = "";
 }
 
@@ -2313,18 +2538,27 @@ void MediaTableView::CancelCellEdit() {
   if (!fActiveEditor)
     return;
 
+  RemoveEditorKeyFilter();
+
   CellTextControl *editor = fActiveEditor;
   fActiveEditor = nullptr;
+  BView *editorParent = editor->Parent();
 
-  if (editor->Parent()) {
-    editor->Parent()->RemoveChild(editor);
-  }
+  if (editorParent)
+    editorParent->RemoveChild(editor);
   delete editor;
 
+  MakeFocus(true);
+
+  if (fEditingRow) {
+    InvalidateRow(fEditingRow);
+  }
+  if (editorParent)
+    editorParent->Invalidate();
+  Invalidate();
+
   fEditingRow = nullptr;
-  fEditingColumn = nullptr;
   fEditingColIdx = -1;
-  fEditingOutlineView = nullptr;
   fEditingPathPrefix = "";
 }
 

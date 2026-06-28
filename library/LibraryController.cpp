@@ -1,5 +1,6 @@
 #include "LibraryController.h"
 #include "MainWindow.h"
+#include "MetadataPropertiesWindow.h"
 #include "LibraryBrowserController.h"
 #include "MusicSourceManagerWindow.h"
 #include "MediaLibraryCache.h"
@@ -412,14 +413,47 @@ void LibraryController::HandleMediaItemFound(BMessage *msg) {
 
   MediaItem *itemToUpdate = nullptr;
   auto mapIt = fWindow->fPathIndex.find(path);
-  if (mapIt != fWindow->fPathIndex.end()) {
+  bool isLibraryItem = (mapIt != fWindow->fPathIndex.end());
+  if (isLibraryItem) {
     itemToUpdate = &fWindow->fAllItems[mapIt->second];
-  } else {
+  } else if (!fWindow->fIsFolderMode) {
     MediaItem newItem;
     newItem.path = path;
     fWindow->fAllItems.push_back(newItem);
     fWindow->fPathIndex[path] = fWindow->fAllItems.size() - 1;
     itemToUpdate = &fWindow->fAllItems.back();
+  }
+
+  // Folder-mode item not in library: apply update in-place without touching
+  // fAllItems, so no stale-comparison triggers a needless full view rebuild.
+  if (!itemToUpdate && fWindow->fIsFolderMode) {
+    MediaItem folderItem;
+    folderItem.path = path;
+    BString tmp;
+    int32 val;
+    if (msg->FindString("title", &tmp) == B_OK) folderItem.title = tmp;
+    if (msg->FindString("artist", &tmp) == B_OK) folderItem.artist = tmp;
+    if (msg->FindString("album", &tmp) == B_OK) folderItem.album = tmp;
+    if (msg->FindString("albumArtist", &tmp) == B_OK) folderItem.albumArtist = tmp;
+    if (msg->FindString("composer", &tmp) == B_OK) folderItem.composer = tmp;
+    if (msg->FindString("genre", &tmp) == B_OK) folderItem.genre = tmp;
+    if (msg->FindString("comment", &tmp) == B_OK) folderItem.comment = tmp;
+    if (msg->FindInt32("year", &val) == B_OK) folderItem.year = val;
+    if (msg->FindInt32("track", &val) == B_OK) folderItem.track = val;
+    if (msg->FindInt32("trackTotal", &val) == B_OK) folderItem.trackTotal = val;
+    if (msg->FindInt32("disc", &val) == B_OK) folderItem.disc = val;
+    if (msg->FindInt32("discTotal", &val) == B_OK) folderItem.discTotal = val;
+    if (msg->FindInt32("rating", &val) == B_OK) folderItem.rating = val;
+    if (msg->FindInt32("duration", &val) == B_OK) folderItem.duration = val;
+    if (msg->FindInt32("bitrate", &val) == B_OK) folderItem.bitrate = val;
+    if (fWindow->fLibraryManager) {
+      fWindow->fLibraryManager->UpdateActiveItem(folderItem);
+      if (fWindow->fLibraryManager->ContentView())
+        fWindow->fLibraryManager->ContentView()->UpdateItem(folderItem);
+    }
+    if (fWindow->fMetadataPropertiesWindow)
+      fWindow->fMetadataPropertiesWindow->PostMessage(msg);
+    return;
   }
 
   if (!itemToUpdate) {
@@ -488,9 +522,14 @@ void LibraryController::HandleMediaItemFound(BMessage *msg) {
   if (msg->FindInt32("bitrate", &val) == B_OK)
     itemToUpdate->bitrate = val;
 
-  if (fWindow->fLibraryManager && fWindow->fLibraryManager->ContentView()) {
-    fWindow->fLibraryManager->ContentView()->UpdateItem(*itemToUpdate);
+  if (fWindow->fLibraryManager) {
+    fWindow->fLibraryManager->UpdateActiveItem(*itemToUpdate);
+    if (fWindow->fLibraryManager->ContentView())
+      fWindow->fLibraryManager->ContentView()->UpdateItem(*itemToUpdate);
   }
+
+  if (fWindow->fMetadataPropertiesWindow)
+    fWindow->fMetadataPropertiesWindow->PostMessage(msg);
 
   if (needsFullRefresh) {
     DEBUG_PRINT("Scheduling debounced view refresh for %s...\n",

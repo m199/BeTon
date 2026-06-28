@@ -9,6 +9,7 @@
 #include "MainWindow.h"
 #include "Messages.h"
 #include "MetadataTagIO.h"
+#include "MusicSourceSettings.h"
 #include "PlaylistLibrary.h"
 #include "PlaylistEditController.h"
 #include "RadioStationController.h"
@@ -169,6 +170,7 @@ void PlaylistSelectionController::ShowRadioPlaylistSource() {
   if (fWindow->fDlnaController)
     fWindow->fDlnaController->SetServerFieldVisible(false);
   fWindow->fLibraryManager->ContentView()->SetRadioMode(true);
+  fWindow->fLibraryManager->ContentView()->SetFolderMode(false);
   fWindow->fLibraryManager->SetActivePaths({});
   if (fWindow->fRadioStationController)
     fWindow->fRadioStationController->ShowStations();
@@ -188,6 +190,7 @@ void PlaylistSelectionController::ShowLibraryPlaylistSource() {
   if (fWindow->fDlnaController)
     fWindow->fDlnaController->SetServerFieldVisible(false);
   fWindow->fLibraryManager->ContentView()->SetRadioMode(false);
+  fWindow->fLibraryManager->ContentView()->SetFolderMode(false);
   fWindow->fLibraryManager->SetRadioFilterMode(false);
   fWindow->fLibraryManager->SetActivePaths({});
   fWindow->UpdateFilteredViews();
@@ -197,6 +200,7 @@ void PlaylistSelectionController::ShowRegularPlaylistSource(const BString &name)
   if (fWindow->fDlnaController)
     fWindow->fDlnaController->SetServerFieldVisible(false);
   fWindow->fLibraryManager->ContentView()->SetRadioMode(false);
+  fWindow->fLibraryManager->ContentView()->SetFolderMode(false);
   fWindow->fLibraryManager->SetRadioFilterMode(false);
   std::vector<BString> paths = fWindow->fPlaylistLibrary->LoadPlaylist(name);
   fWindow->fLibraryManager->SetActivePaths(paths);
@@ -207,6 +211,7 @@ void PlaylistSelectionController::ShowFolderPlaylistSource(const BString &name) 
   if (fWindow->fDlnaController)
     fWindow->fDlnaController->SetServerFieldVisible(false);
   fWindow->fLibraryManager->ContentView()->SetRadioMode(false);
+  fWindow->fLibraryManager->ContentView()->SetFolderMode(true);
   fWindow->fLibraryManager->SetRadioFilterMode(false);
 
   BString folderPath = fWindow->fPlaylistLibrary->FolderPathForName(name);
@@ -243,7 +248,11 @@ void PlaylistSelectionController::ShowFolderPlaylistSource(const BString &name) 
     }
 
     TagData td;
-    if (MetadataTagIO::ReadTags(bpath, td)) {
+    MetadataWriteTargets targets = MetadataTagIO::WriteTargetsForPath(path);
+    bool readOk = (!targets.tags && targets.bfs)
+        ? MetadataTagIO::ReadBfsAttributes(bpath, td)
+        : MetadataTagIO::ReadTags(bpath, td);
+    if (readOk) {
       if (!td.title.IsEmpty())
         item.title = td.title;
       item.artist = td.artist;

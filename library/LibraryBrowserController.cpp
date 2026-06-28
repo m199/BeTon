@@ -182,6 +182,14 @@ void LibraryBrowserController::RenameActivePath(const BString &from,
       it.path = to;
 }
 
+void LibraryBrowserController::UpdateActiveItem(const MediaItem &item) {
+  for (auto &it : fActiveItems)
+    if (it.path == item.path) {
+      it = item;
+      return;
+    }
+}
+
 /**
  * @brief Returns selected display text from a filter view.
  */

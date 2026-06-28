@@ -123,6 +123,8 @@ public:
    */
   void RenameActivePath(const BString &from, const BString &to);
 
+  void UpdateActiveItem(const MediaItem &item);
+
   /**
    * @brief Checks if a specific file path is allowed in the current view mode.
    */
