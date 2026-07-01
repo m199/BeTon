@@ -1870,21 +1870,10 @@ void MetadataPropertiesWindow::_LoadInitialData() {
     _SendMessageToTarget(MSG_PROP_REQUEST_COVER, req);
   }
 
-  {
-    BFile file(fFilePath.Path(), B_READ_ONLY);
-    if (file.InitCheck() == B_OK) {
-      int32 rating = 0;
-      if (file.ReadAttr("Media:Rating", B_INT32_TYPE, 0, &rating,
-                        sizeof(rating)) == sizeof(rating)) {
-        fCurrentRating = rating;
-      } else {
-        fCurrentRating = 0;
-      }
-    }
-    fRatingDirty = false;
-    fRatingMixed = false;
-    _UpdateRatingStars();
-  }
+  fCurrentRating = (int32)td.rating;
+  fRatingDirty = false;
+  fRatingMixed = false;
+  _UpdateRatingStars();
 
   _RememberInitialFieldValue("title", fEdTitle);
   _RememberInitialFieldValue("artist", fEdArtist);

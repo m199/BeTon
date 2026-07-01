@@ -287,15 +287,17 @@ void MediaLibraryScanner::ProcessFile(BEntry &entry) {
   item.mbTrackId = mbTrackId;
   item.mbAlbumId = mbAlbumId;
   item.mbArtistId = mbArtistId;
-  if (hasBfsData) {
+  if (hasBfsData && bfsData.rating > 0) {
     item.rating = bfsData.rating;
-    if (item.rating > 0)
-      DEBUG_PRINT("Read rating %d for %s\n", (int)item.rating,
-                  item.path.String());
-    else
-      DEBUG_PRINT("Rating is 0 for %s\n", item.path.String());
+    DEBUG_PRINT("Read rating %d (BFS) for %s\n", (int)item.rating,
+                item.path.String());
   } else {
-    DEBUG_PRINT("No BFS data for %s\n", item.path.String());
+    TagData embeddedData;
+    MetadataTagIO::ReadTags(path, embeddedData);
+    item.rating = embeddedData.rating;
+    if (item.rating > 0)
+      DEBUG_PRINT("Read rating %d (embedded) for %s\n", (int)item.rating,
+                  item.path.String());
   }
 
   bool needsFlush = false;

@@ -9,6 +9,7 @@
 #include "Messages.h"
 #include "Debug.h"
 #include "UndoManager.h"
+#include "MetadataTagIO.h"
 
 #include <Catalog.h>
 #include <Path.h>
@@ -279,17 +280,71 @@ void PropertiesController::SetRating(BMessage *msg) {
     BFile file(path.Path(), B_READ_WRITE);
     if (file.InitCheck() == B_OK) {
       file.WriteAttr("Media:Rating", B_INT32_TYPE, 0, &rating, sizeof(rating));
-      DEBUG_PRINT("Set rating %ld for %s\n", (long)rating,
-                  path.Path());
-    }
+      DEBUG_PRINT("Set rating %ld for %s\n", (long)rating, path.Path());
 
-    MediaTableView *cv =
-        fWindow->fLibraryManager ? fWindow->fLibraryManager->ContentView() : nullptr;
-    if (cv) {
-      auto mapIt = fWindow->fPathIndex.find(path.Path());
-      if (mapIt != fWindow->fPathIndex.end()) {
-        fWindow->fAllItems[mapIt->second].rating = rating;
-        cv->UpdateItem(fWindow->fAllItems[mapIt->second]);
+      if (!MetadataTagIO::IsBeFsVolume(path)) {
+        TagData td;
+        MetadataTagIO::ReadTags(path, td);
+        td.rating = (uint32)rating;
+        MetadataTagIO::WriteTags(path, td);
+        DEBUG_PRINT("Wrote rating %ld to embedded tags for %s\n",
+                    (long)rating, path.Path());
+
+        // On non-BFS volumes the live query never fires — update in-memory
+        // state and views directly, mirroring what the BFS query path does
+        // but without going through HandleMediaItemFound (which normalizes
+        // the path and can create a duplicate item triggering a full rebuild).
+        BString pathStr(path.Path());
+        auto mapIt = fWindow->fPathIndex.find(pathStr);
+        if (mapIt != fWindow->fPathIndex.end()) {
+          MediaItem &mi = fWindow->fAllItems[mapIt->second];
+          mi.rating = rating;
+
+          // Replicate exactly what MetadataService::SaveTags does after a
+          // successful write: send MSG_MEDIA_ITEM_FOUND with all fields to
+          // the window via BMessenger. This lets the window's message loop
+          // handle the view update cleanly, just like the Apply button path.
+          BMessage update(MSG_MEDIA_ITEM_FOUND);
+          update.AddString("path", pathStr);
+          update.AddString("title", mi.title);
+          update.AddString("artist", mi.artist);
+          update.AddString("album", mi.album);
+          update.AddString("genre", mi.genre);
+          update.AddString("comment", mi.comment);
+          update.AddString("albumArtist", mi.albumArtist);
+          update.AddString("composer", mi.composer);
+          update.AddInt32("year", mi.year);
+          update.AddInt32("track", mi.track);
+          update.AddInt32("trackTotal", mi.trackTotal);
+          update.AddInt32("disc", mi.disc);
+          update.AddInt32("discTotal", mi.discTotal);
+          update.AddInt32("rating", rating);
+          update.AddInt32("duration", mi.duration);
+          update.AddInt32("bitrate", mi.bitrate);
+          BMessenger(fWindow).SendMessage(&update);
+        } else {
+          // Folder Mode on non-BFS: item not in library cache — use the
+          // TagData already read above to send a full update so the view
+          // row is not left with empty fields.
+          BMessage update(MSG_MEDIA_ITEM_FOUND);
+          update.AddString("path", pathStr);
+          update.AddString("title", td.title);
+          update.AddString("artist", td.artist);
+          update.AddString("album", td.album);
+          update.AddString("genre", td.genre);
+          update.AddString("comment", td.comment);
+          update.AddString("albumArtist", td.albumArtist);
+          update.AddString("composer", td.composer);
+          update.AddInt32("year",       (int32)td.year);
+          update.AddInt32("track",      (int32)td.track);
+          update.AddInt32("trackTotal", (int32)td.trackTotal);
+          update.AddInt32("disc",       (int32)td.disc);
+          update.AddInt32("discTotal",  (int32)td.discTotal);
+          update.AddInt32("rating",     rating);
+          update.AddInt32("duration",   (int32)td.lengthSec);
+          update.AddInt32("bitrate",    (int32)td.bitrate);
+          BMessenger(fWindow).SendMessage(&update);
+        }
       }
     }
   }
