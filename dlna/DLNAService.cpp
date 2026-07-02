@@ -254,7 +254,7 @@ void DLNAService::_SendMSearch(int sock)
                     << "MAN: \"ssdp:discover\"\r\n"
                     << "MX: 3\r\n"
                     << "ST: " << targets[i] << "\r\n"
-                    << "USER-AGENT: Haiku/BeTon DLNA\r\n"
+                    << "USER-AGENT: Haiku/Beton DLNA\r\n"
                     << "\r\n";
 
             sendto(sock, msearch.String(), msearch.Length(), 0,

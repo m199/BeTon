@@ -52,6 +52,22 @@ void PlaylistSelectionController::HandlePlaylistSelection(BMessage *msg) {
   fWindow->fIsRadioMode = (kind == PlaylistItemKind::Radio);
   fWindow->fIsDlnaMode = (kind == PlaylistItemKind::DLNA);
 
+  // Fast Edit makes no sense for Radio/DLNA (read-only metadata).
+  // Temporarily disable it without touching fFastEditEnabled so the user's
+  // preference is restored when switching back to an editable source.
+  {
+    bool editable = !fWindow->fIsRadioMode && !fWindow->fIsDlnaMode;
+    bool effective = editable && fWindow->fFastEditEnabled;
+    if (fWindow->fLibraryManager && fWindow->fLibraryManager->ContentView()) {
+      MediaTableView *cv = fWindow->fLibraryManager->ContentView();
+      if (!effective)
+        cv->CommitCellEdit();
+      cv->SetFastEditEnabled(effective);
+    }
+    if (fWindow->fFastEditItem)
+      fWindow->fFastEditItem->SetMarked(effective);
+  }
+
   if (fWindow->fSearchField && fWindow->fSearchField->Text()[0] != '\0')
     fWindow->fSearchField->SetText("");
 

@@ -25,7 +25,7 @@
 SettingsController::SettingsController(MainWindow *window) : fWindow(window) {}
 
 /**
- * @brief Persists current application settings to `~/config/settings/BeTon/settings`.
+ * @brief Persists current application settings to `~/config/settings/Beton/settings`.
  */
 void SettingsController::SaveSettings() {
   if (!fWindow || !fWindow->fLibraryManager ||

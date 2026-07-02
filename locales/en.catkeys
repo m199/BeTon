@@ -1,4 +1,4 @@
-1	English	application/x-vnd.BeTon	612597721
+1	English	application/x-vnd.Beton	989746807
 Error: No data received	MusicBrainzMatcherWindow		Error: No data received
 Generate New Playlist	MainWindow		Generate New Playlist
 Up	MusicBrainzMatcherWindow		Up
@@ -14,24 +14,26 @@ Year	MediaTableView		Year
 Could not connect to the radio station. The server might be down or unreachable.	RadioStationController		Could not connect to the radio station. The server might be down or unreachable.
 Sync complete	MetadataSyncController		Sync complete
 Unmute	ViewStateController		Unmute
+Genre:	RadioStationEditorDialog		Genre:
 A DLNA scan is already in progress...	DLNAViewController		A DLNA scan is already in progress...
 Fetching metadata from MusicBrainz...	MusicBrainzLookupController		Fetching metadata from MusicBrainz...
-Genre:	RadioStationEditorDialog		Genre:
+Retry	RadioStationController		Retry
 Refresh '%s'	DLNAViewController		Refresh '%s'
 File not found	MetadataPropertiesWindow		File not found
-Retry	RadioStationController		Retry
 Rule List	SmartPlaylistGeneratorWindow		Rule List
 The file could not be found:	PlaybackQueueManager		The file could not be found:
 Searching for DLNA devices...	StatusBarController		Searching for DLNA devices...
 Details	MetadataPropertiesWindow		Details
 Cancelled by user.	MusicBrainzLookupController		Cancelled by user.
+Failed to get target directory path	PlaylistEditController		Failed to get target directory path
 Indexing DLNA server...	StatusBarController		Indexing DLNA server...
 File Information	MainWindow		File Information
 Unknown	NowPlayingInfoPanel		Unknown
 ◀ Previous	MetadataPropertiesWindow		◀ Previous
 New Playlist	SmartPlaylistGeneratorWindow		New Playlist
-Indexing '%s'... %ld audio files found	DLNAViewController		Indexing '%s'... %ld audio files found
+Edit	MainWindow		Edit
 Playing from DLNA server...	DLNAViewController		Playing from DLNA server...
+Indexing '%s'... %ld audio files found	DLNAViewController		Indexing '%s'... %ld audio files found
 Genre:	SmartPlaylistGeneratorWindow		Genre:
 DLNA item unavailable	DLNAViewController		DLNA item unavailable
 not	SmartPlaylistGeneratorWindow		not
@@ -39,12 +41,17 @@ Add	MusicSourceManagerWindow		Add
 Connection to radio station failed	RadioStationController		Connection to radio station failed
 Save	MetadataPropertiesWindow		Save
 No Language	LibraryBrowserController		No Language
+Country:	MetadataPropertiesWindow		Country:
 Cancel	RadioStationController		Cancel
+Sort	MediaTableView		Sort
 Name:	SmartPlaylistGeneratorWindow		Name:
 Multiple files	MetadataPropertiesWindow		Multiple files
 URL	MediaTableView		URL
 Apply to All	MetadataSyncConflictDialog		Apply to All
+Move File To...	MediaTableView		Move File To...
 No Title	MainWindow		No Title
+Move File To Trash	MediaTableView		Move File To Trash
+Undo	MainWindow		Undo
 Connection failed	RadioStationController		Connection failed
 Apply Selection (Track)	MetadataPropertiesWindow		Apply Selection (Track)
 Metadata applied successfully (Auto-Match).	MusicBrainzLookupController		Metadata applied successfully (Auto-Match).
@@ -56,14 +63,15 @@ Ready	DLNAViewController		Ready
 Album Artist:	MetadataPropertiesWindow		Album Artist:
 MB Album ID:	MetadataPropertiesWindow		MB Album ID:
 Preparing DLNA scan...	StatusBarController		Preparing DLNA scan...
+Failed to find Trash directory	PlaylistEditController		Failed to find Trash directory
 Scanning: %ld folders, %ld files (%02d:%02d)	LibraryController		Scanning: %ld folders, %ld files (%02d:%02d)
 Set Playlist Folder	MainWindow		Set Playlist Folder
 Generate	SmartPlaylistGeneratorWindow		Generate
 MusicBrainz: %zu hits.	MusicBrainzLookupController		MusicBrainz: %zu hits.
 Help	MainWindow		Help
+Now playing: %s	RadioStationController		Now playing: %s
 Remove Cover	MetadataPropertiesWindow		Remove Cover
 Searching on MusicBrainz...	MusicBrainzLookupController		Searching on MusicBrainz...
-Now playing: %s	RadioStationController		Now playing: %s
 Previous	ViewStateController		Previous
 Play	MediaTableView		Play
 Repeat: All	ViewStateController		Repeat: All
@@ -71,32 +79,38 @@ Title	MediaTableView		Title
 Next	ViewStateController		Next
 MusicBrainz	MetadataPropertiesWindow		MusicBrainz
 New Playlist	MainWindow		New Playlist
+Move failed: target folder does not exist	LibraryController		Move failed: target folder does not exist
+Album	MetadataPropertiesWindow		Album
 : %zu tracks.	PlaylistEditController		: %zu tracks.
 OK	RadioStationEditorDialog		OK
 Add	SmartPlaylistGeneratorWindow		Add
 Cancel	MetadataSyncConflictDialog		Cancel
+Target is not a valid directory	PlaylistEditController		Target is not a valid directory
 Sidebar	MainWindow		Sidebar
 Apply	MetadataPropertiesWindow		Apply
 MB Track ID:	MetadataPropertiesWindow		MB Track ID:
+Remove	PlaylistSidebarView		Remove
 Name:	PlaylistNameDialog		Name:
 Failed to load DLNA cache.	DLNAViewController		Failed to load DLNA cache.
 Rename	PlaylistSidebarView		Rename
 Sync Settings	MusicSourceSyncSettingsDialog		Sync Settings
+Move failed: path must be absolute	LibraryController		Move failed: path must be absolute
 Indexing '%s'... %ld album covers	DLNAViewController		Indexing '%s'... %ld album covers
 Disc:	MetadataPropertiesWindow		Disc:
 Show all Album	LibraryBrowserController		Show all Album
 Metadata Conflict	MetadataSyncConflictDialog		Metadata Conflict
 (mixed)	PlaylistEditController		(mixed)
-From:	SmartPlaylistGeneratorWindow		From:
 Cancel	RadioStationEditorDialog		Cancel
+From:	SmartPlaylistGeneratorWindow		From:
 Album Artist	MediaTableView		Album Artist
 Files:	MusicBrainzMatcherWindow		Files:
 Playlist '%s' created	PlaylistEditController		Playlist '%s' created
 Add to Playlist	MediaTableView		Add to Playlist
 Playlist-Folder set: %s	PlaylistEditController		Playlist-Folder set: %s
+Tracks	MetadataPropertiesWindow		Tracks
 Track	MediaTableView		Track
-Cancelled.	MetadataPropertiesWindow		Cancelled.
 System Default	MainWindow		System Default
+Cancelled.	MetadataPropertiesWindow		Cancelled.
 OK	MusicSourceSyncSettingsDialog		OK
 OK	DLNAViewController		OK
 Track:	MetadataPropertiesWindow		Track:
@@ -105,6 +119,7 @@ No results found.	MetadataPropertiesWindow		No results found.
 Error: Release ID not found.	MusicBrainzLookupController		Error: Release ID not found.
 Generate Playlist	SmartPlaylistGeneratorWindow		Generate Playlist
 Match SeekBar	MainWindow		Match SeekBar
+Move failed: source file not found	LibraryController		Move failed: source file not found
 Ready.	MusicBrainzLookupController		Ready.
 Buffering audio stream...	RadioStationController		Buffering audio stream...
 Indexing '%s'...	StatusBarController		Indexing '%s'...
@@ -122,16 +137,16 @@ Genre	SmartPlaylistGeneratorWindow		Genre
 Now Playing	MainWindow		Now Playing
 Apply	MusicBrainzMatcherWindow		Apply
 Indexing '%s'... matching album covers	DLNAViewController		Indexing '%s'... matching album covers
-Enable DLNA	MainWindow		Enable DLNA
 Connecting to radio station...	RadioStationController		Connecting to radio station...
+Enable DLNA	MainWindow		Enable DLNA
 Album Cover	MainWindow		Album Cover
 MIDI: Only BFS attributes supported	MetadataPropertiesWindow		MIDI: Only BFS attributes supported
 Properties	MetadataPropertiesWindow		Properties
 Down	MusicBrainzMatcherWindow		Down
 Artist	SmartPlaylistGeneratorWindow		Artist
 Path	MediaTableView		Path
-About BeTon…	MainWindow		About BeTon…
 Show in Tracker	MediaTableView		Show in Tracker
+Move failed: 	LibraryController		Move failed: 
 Saving metadata...	PropertiesController		Saving metadata...
 %ld  tracks. Total duration %02d:%02d:%02d	StatusBarController		%ld  tracks. Total duration %02d:%02d:%02d
 <no playlists>	MediaTableView		<no playlists>
@@ -149,13 +164,17 @@ Generated Playlist	PlaylistEditController		Generated Playlist
 Import m3u/pls...	MediaTableView		Import m3u/pls...
 No Album	LibraryBrowserController		No Album
 <-- No Match -->	MusicBrainzMatcherWindow		<-- No Match -->
+Move failed: invalid target path	LibraryController		Move failed: invalid target path
 On	MainWindow		On
+Moved %zu items to Trash.	PlaylistEditController		Moved %zu items to Trash.
 Remove	MusicSourceManagerWindow		Remove
 Syncing... %ld/%ld	MetadataSyncController		Syncing... %ld/%ld
+Enable Fast Edit	MainWindow		Enable Fast Edit
 Repeat: Off	ViewStateController		Repeat: Off
 Rating	MediaTableView		Rating
 Metadata successfully saved.	MusicBrainzLookupController		Metadata successfully saved.
 Indexing '%s'... finalizing %ld items	DLNAViewController		Indexing '%s'... finalizing %ld items
+Moved %zu items to %s.	PlaylistEditController		Moved %zu items to %s.
 Country:	RadioStationEditorDialog		Country:
 %ld tracks. Total duration %02d:%02d:%02d	StatusBarController		%ld tracks. Total duration %02d:%02d:%02d
 Composer:	MetadataPropertiesWindow		Composer:
@@ -163,7 +182,9 @@ File not found	PlaybackQueueManager		File not found
 Language:	RadioStationEditorDialog		Language:
 Year	SmartPlaylistGeneratorWindow		Year
 (limited)	PlaylistEditController		(limited)
+Redo	MainWindow		Redo
 Playlist	PlaylistNameDialog		Playlist
+Year	MetadataPropertiesWindow		Year
 Properties - 	MetadataPropertiesWindow		Properties - 
 Language	MediaTableView		Language
 Stop	ViewStateController		Stop
@@ -193,8 +214,9 @@ Use BFS	MetadataSyncConflictDialog		Use BFS
 To:	SmartPlaylistGeneratorWindow		To:
 Cancel	MusicSourceSyncSettingsDialog		Cancel
 Settings	MusicSourceManagerWindow		Settings
-Rating updated.	PropertiesController		Rating updated.
+Country	MetadataPropertiesWindow		Country
 Add Station	RadioStationEditorDialog		Add Station
+Rating updated.	PropertiesController		Rating updated.
 Conflict Resolution:	MusicSourceSyncSettingsDialog		Conflict Resolution:
 MusicBrainz Tracks:	MusicBrainzMatcherWindow		MusicBrainz Tracks:
 %ld tracks. Total duration %02d:%02d	StatusBarController		%ld tracks. Total duration %02d:%02d
@@ -209,6 +231,7 @@ Preparing DLNA scan for '%s'...	DLNAViewController		Preparing DLNA scan for '%s'
 Duration	MediaTableView		Duration
 Remove from Playlist	MediaTableView		Remove from Playlist
 No cover found.	MetadataPropertiesWindow		No cover found.
+This radio station uses a format that is currently not supported by Beton or the Haiku Media Kit.	RadioStationController		This radio station uses a format that is currently not supported by Beton or the Haiku Media Kit.
 '%s' is no longer available. The server may be offline or the file may have been removed.	DLNAViewController		'%s' is no longer available. The server may be offline or the file may have been removed.
 Cancel	PlaylistNameDialog		Cancel
 Artist: 	SmartPlaylistGeneratorWindow		Artist: 
@@ -218,6 +241,7 @@ Edit Station	RadioStationEditorDialog		Edit Station
 Loading cache... %ld/%zu	LibraryController		Loading cache... %ld/%zu
 No files selected	MetadataSyncController		No files selected
 Rescan started...	LibraryController		Rescan started...
+Genre	MetadataPropertiesWindow		Genre
 Searching for DLNA devices...	DLNAViewController		Searching for DLNA devices...
 Enable Radio	MainWindow		Enable Radio
 Define Rule	SmartPlaylistGeneratorWindow		Define Rule
@@ -244,16 +268,19 @@ Use Tags	MetadataSyncConflictDialog		Use Tags
 Pause	ViewStateController		Pause
 %ld tracks	StatusBarController		%ld tracks
 Album: 	MetadataSyncConflictDialog		Album: 
+Title	MetadataPropertiesWindow		Title
 Fetching metadata...	MetadataPropertiesWindow		Fetching metadata...
 Apply	MetadataSyncConflictDialog		Apply
 Found '%s'. Preparing DLNA scan...	DLNAViewController		Found '%s'. Preparing DLNA scan...
 Now Playing (Radio)	MainWindow		Now Playing (Radio)
 Sync cancelled	MetadataSyncController		Sync cancelled
+Moved to 	LibraryController		Moved to 
 Genre: 	SmartPlaylistGeneratorWindow		Genre: 
 Shuffle: On	ViewStateController		Shuffle: On
 File	MainWindow		File
 Format not supported	RadioStationController		Format not supported
 Apply Selection (Album)	MetadataPropertiesWindow		Apply Selection (Album)
+Artist	MetadataPropertiesWindow		Artist
 No results found.	StatusBarController		No results found.
 Play	ViewStateController		Play
 Metadata updated.	MetadataPropertiesWindow		Metadata updated.
@@ -261,7 +288,6 @@ Rescan	MainWindow		Rescan
 Indexing '%s'... %ld items	DLNAViewController		Indexing '%s'... %ld items
 Artist: 	MetadataSyncConflictDialog		Artist: 
 Manage Music Folders	MainWindow		Manage Music Folders
-This radio station uses a format that is currently not supported by BeTon or the Haiku Media Kit.	RadioStationController		This radio station uses a format that is currently not supported by BeTon or the Haiku Media Kit.
 Cancel	MetadataPropertiesWindow		Cancel
 No Artist	LibraryBrowserController		No Artist
 Add to Album	MetadataPropertiesWindow		Add to Album
@@ -280,6 +306,7 @@ No Cover	ArtworkView		No Cover
 OK	PlaybackQueueManager		OK
 Indexing DLNA server...	DLNAViewController		Indexing DLNA server...
 Selection Color	MainWindow		Selection Color
+About Beton…	MainWindow		About Beton…
 MusicBrainz: Nothing found.	MusicBrainzLookupController		MusicBrainz: Nothing found.
 Max. Duration (Min)	SmartPlaylistGeneratorWindow		Max. Duration (Min)
 Show all Artist	LibraryBrowserController		Show all Artist

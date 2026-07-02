@@ -309,7 +309,7 @@ bool ReadUrlBytes(const std::string &url, std::vector<uint8> &out,
 
   AVDictionary *options = nullptr;
   av_dict_set(&options, "user_agent",
-              "Mozilla/5.0 (Haiku; x86_64) BeTon/1.0", 0);
+              "Mozilla/5.0 (Haiku; x86_64) Beton/1.0", 0);
   av_dict_set(&options, "rw_timeout", "3000000", 0);
 
   AVIOContext *io = nullptr;

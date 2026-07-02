@@ -50,14 +50,14 @@ static void _MakeShortcutSpec(BMessage* spec, const char* appPath, const char* a
 }
 
 /**
- * @class BeTonApp
+ * @class BetonApp
  * @brief The Application class.
  *
  * Initializes the application and creates the main window.
  */
-class BeTonApp : public BApplication {
+class BetonApp : public BApplication {
 public:
-  BeTonApp() : BApplication("application/x-vnd.BeTon"), fPendingCommand(0) {}
+  BetonApp() : BApplication("application/x-vnd.Beton"), fPendingCommand(0) {}
 
   void ReadyToRun() override {
     MainWindow *window = new MainWindow();
@@ -239,7 +239,7 @@ int main(int argc, char **argv) {
     DEBUG_PRINT("Starting in DEBUG mode\n");
   }
 
-  BeTonApp app;
+  BetonApp app;
   app.Run();
   return 0;
 }

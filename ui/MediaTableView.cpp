@@ -2428,7 +2428,7 @@ bool MediaTableView::StartAdjacentCellEdit(BRow *row, int32 colIdx,
       continue;
 
     int32 field = column->LogicalFieldNum();
-    if (FieldNameForColumn(field) != nullptr)
+    if (FieldNameForColumn(field) != nullptr && field != 11)
       editableColumns.push_back({column, field, colLeft});
 
     colLeft += column->Width();

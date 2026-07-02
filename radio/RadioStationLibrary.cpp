@@ -26,7 +26,7 @@ RadioStationLibrary::~RadioStationLibrary() {}
 
 /**
  * @brief Builds the full path to the radio settings file.
- * @return Absolute path string, e.g. ~/config/settings/BeTon/radio.settings.
+ * @return Absolute path string, e.g. ~/config/settings/Beton/radio.settings.
  */
 BString RadioStationLibrary::_SettingsPath() const {
   BPath path;
@@ -88,7 +88,7 @@ bool RadioStationLibrary::LoadStations() {
 /**
  * @brief Saves all radio stations to the settings file.
  *
- * Creates the BeTon settings directory if it does not exist.
+ * Creates the Beton settings directory if it does not exist.
  * Each station is stored as a nested BMessage.
  *
  * @return True on success.
@@ -387,7 +387,7 @@ BString RadioStationLibrary::ResolveStreamUrl(const BString &url) {
     http->SetMethod(B_HTTP_HEAD);
     http->SetFollowLocation(false);
     BHttpHeaders headers;
-    headers.AddHeader("User-Agent", "BeTon/1.0 (Haiku OS; VLC-like)");
+    headers.AddHeader("User-Agent", "Beton/1.0 (Haiku OS; VLC-like)");
     http->SetHeaders(headers);
   }
 
@@ -456,7 +456,7 @@ BString RadioStationLibrary::ResolveStreamUrl(const BString &url) {
       if (getHttp) {
         getHttp->SetFollowLocation(false);
         BHttpHeaders headers;
-        headers.AddHeader("User-Agent", "BeTon/1.0 (Haiku OS; VLC-like)");
+        headers.AddHeader("User-Agent", "Beton/1.0 (Haiku OS; VLC-like)");
         getHttp->SetHeaders(headers);
       }
       

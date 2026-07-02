@@ -1,10 +1,10 @@
-# Doxyfile for BeTon - Haiku Music Player
+# Doxyfile for Beton - Haiku Music Player
 # Run with: doxygen Doxyfile
 
 #---------------------------------------------------------------------------
 # Project Settings
 #---------------------------------------------------------------------------
-PROJECT_NAME           = "BeTon"
+PROJECT_NAME           = "Beton"
 PROJECT_BRIEF          = "A native music player for Haiku OS"
 PROJECT_NUMBER         = 1.0
 OUTPUT_DIRECTORY       = docs

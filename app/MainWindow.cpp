@@ -126,7 +126,7 @@ bool MainWindow::_HandleMetadataMessage(BMessage *msg) {
 }
 
 void MainWindow::_ShowAboutWindow() {
-  BAboutWindow *about = new BAboutWindow("BeTon", "application/x-vnd.BeTon");
+  BAboutWindow *about = new BAboutWindow("Beton", "application/x-vnd.Beton");
   about->AddCopyright(2025, "Daniel Weber");
   about->AddDescription("A music library manager and player for Haiku.\n\n"
                         "Solid grey and cold\nYet it vibrates with the "
@@ -134,6 +134,7 @@ void MainWindow::_ShowAboutWindow() {
                         "Thanks to:\n"
                         "andimachovec\n"
                         "Begasus\n"
+                        "dcbeckman\n"
                         "Humdinger\n"
                         "niFinx\n"
                         "zuMi\n\n"
@@ -363,7 +364,7 @@ private:
  * controller. Starts the initial cache load and status updates.
  */
 MainWindow::MainWindow()
-    : BWindow(BRect(100, 100, 400, 300), "BeTon", B_DOCUMENT_WINDOW,
+    : BWindow(BRect(100, 100, 400, 300), "Beton", B_DOCUMENT_WINDOW,
               B_QUIT_ON_WINDOW_CLOSE),
       fNewFilesCount(0), fMetadataPropertiesWindow(nullptr), fPlaybackEngine(nullptr),
       fUpdateRunner(nullptr) {
@@ -662,7 +663,7 @@ void MainWindow::_BuildUI() {
   fMenuBar->AddItem(fSettingsMenu);
 
   BMenu *helpMenu = new BMenu(B_TRANSLATE("Help"));
-  helpMenu->AddItem(new BMenuItem(B_TRANSLATE("About BeTon" B_UTF8_ELLIPSIS),
+  helpMenu->AddItem(new BMenuItem(B_TRANSLATE("About Beton" B_UTF8_ELLIPSIS),
                                   new BMessage(B_ABOUT_REQUESTED)));
   fMenuBar->AddItem(helpMenu);
 

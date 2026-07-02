@@ -1,6 +1,6 @@
-# Project Notes - Haiku / BeTon Development Notes
+# Project Notes - Haiku / Beton Development Notes
 
-This file documents critical compiler gotchas, private access workarounds, and type-safety rules found during BeTon development on Haiku.
+This file documents critical compiler gotchas, private access workarounds, and type-safety rules found during Beton development on Haiku.
 
 ## 1. Helper Filter Private Member Access
 *   **Problem**: In `MainWindow.cpp`, helper classes like `WindowClickFilter` intercept message loops and need to inspect private members of `MainWindow` (e.g., `fLibraryManager`). Because these filters are file-local classes and not members, they cannot access `private` fields.

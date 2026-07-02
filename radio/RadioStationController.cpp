@@ -335,7 +335,7 @@ void RadioStationController::DownloadCover(const BString &coverUrl) {
                   dynamic_cast<BPrivate::Network::BHttpRequest *>(req.get())) {
             http->SetFollowLocation(true);
             BPrivate::Network::BHttpHeaders headers;
-            headers.AddHeader("User-Agent", "BeTon/1.0 (Haiku OS)");
+            headers.AddHeader("User-Agent", "Beton/1.0 (Haiku OS)");
             http->SetHeaders(headers);
           }
           thread_id tid = req->Run();
@@ -379,7 +379,7 @@ void RadioStationController::ShowUnsupportedAlert() {
   BAlert *alert = new BAlert(
       B_TRANSLATE("Format not supported"),
       B_TRANSLATE("This radio station uses a format that is "
-                  "currently not supported by BeTon or the "
+                  "currently not supported by Beton or the "
                   "Haiku Media Kit."),
       B_TRANSLATE("OK"), nullptr, nullptr, B_WIDTH_AS_USUAL, B_WARNING_ALERT);
   alert->Go();

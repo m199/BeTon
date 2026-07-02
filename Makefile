@@ -1,6 +1,6 @@
-NAME = BeTon
+NAME = Beton
 TYPE = APP
-APP_MIME_SIG = application/x-vnd.BeTon
+APP_MIME_SIG = application/x-vnd.Beton
 
 LINKER = $(CXX)
 CC = gcc
@@ -86,7 +86,7 @@ SYSTEM_INCLUDE_PATHS = \
     /boot/system/develop/headers/private/media/experimental \
     /boot/system/develop/headers/private/shared
 
-RDEFS = BeTon.rdef
+RDEFS = Beton.rdef
 LOCALES = de
 
 COMPILER_FLAGS = -Wall -std=c++17

@@ -1,4 +1,4 @@
-# BeTon
+# Beton
 
 A native music player for Haiku.
 
@@ -37,7 +37,7 @@ pkgman install taglib_devel musicbrainz_devel ffmpeg8_devel
 ## Building
 
 ```bash
-cd BeTon
+cd Beton
 make
 make bindcatalogs
 ```

@@ -474,7 +474,7 @@ MusicBrainzApiClient::SearchRecording(const MBRecordingSearchOptions &options,
     if (shouldCancel && shouldCancel())
       return results;
     BString ua;
-    ua.SetToFormat("BeTon/0.1 (%s)", fContact.String());
+    ua.SetToFormat("Beton/0.1 (%s)", fContact.String());
     DEBUG_PRINT("User-Agent: '%s'\n", ua.String());
 
     std::vector<BString> queries = BuildRecordingSearchQueries(options);
@@ -622,7 +622,7 @@ MusicBrainzApiClient::SearchRelease(const MBReleaseSearchOptions &options,
     if (shouldCancel && shouldCancel())
       return results;
     BString ua;
-    ua.SetToFormat("BeTon/0.1 (%s)", fContact.String());
+    ua.SetToFormat("Beton/0.1 (%s)", fContact.String());
 
     std::vector<BString> queries = BuildReleaseSearchQueries(options);
     if (queries.empty())
@@ -749,7 +749,7 @@ MusicBrainzApiClient::GetReleaseDetails(const BString &releaseId,
     _RespectRateLimit();
 
     BString ua;
-    ua.SetToFormat("BeTon/0.1 (%s)", fContact.String());
+    ua.SetToFormat("Beton/0.1 (%s)", fContact.String());
 
     fLastCall = system_time();
 
@@ -909,7 +909,7 @@ int MusicBrainzApiClient::_FetchUrl(const BString &urlStr,
 
     if (auto http = dynamic_cast<BHttpRequest *>(req.get())) {
       BString ua;
-      ua.SetToFormat("BeTon/0.1 (%s)", fContact.String());
+      ua.SetToFormat("Beton/0.1 (%s)", fContact.String());
       http->SetUserAgent(ua.String());
       http->SetFollowLocation(false);
     }
@@ -992,7 +992,7 @@ MusicBrainzApiClient::BestReleaseForRecording(const BString &recordingId,
     _RespectRateLimit();
 
     BString ua;
-    ua.SetToFormat("BeTon/0.1 (%s)", fContact.String());
+    ua.SetToFormat("Beton/0.1 (%s)", fContact.String());
 
     fLastCall = system_time();
 
